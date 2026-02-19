@@ -43,6 +43,44 @@ def extract_features():
     Y = dataset.loc[:, Y.name]
     X = dataset.loc[:, X.columns]
     dataset.index.name = 'Date'
+
+    target = "AAPL"
+    
+    # Pull AAPL OHLC data
+    open_  = stk_data.loc[:, ("Open", target)]
+    high   = stk_data.loc[:, ("High", target)]
+    low    = stk_data.loc[:, ("Low", target)]
+    close  = stk_data.loc[:, ("Adj Close", target)]
+    
+    # (1) High - Low (daily range)
+    hl_diff = (high - low).rename("HL_diff")
+    
+    # (2) Open - Close (directional move)
+    oc_diff = (open_ - close).rename("OC_diff")
+    
+    # (3) High - Close (upper wick)
+    hc_diff = (high - close).rename("HC_diff")
+    
+    # (4) Close - Low (lower wick)
+    cl_diff = (close - low).rename("CL_diff")
+    
+    # (5) End of quarter flag
+    end_of_quarter = close.index.to_series().dt.is_quarter_end.astype(int).rename("end_of_quarter")
+    
+    # Combine new features
+    X_extra = pd.concat(
+        [hl_diff, oc_diff, hc_diff, cl_diff, end_of_quarter],
+        axis=1
+    )
+    
+    # Add them to existing predictors
+    X = pd.concat([X, X_extra], axis=1)
+    
+    # Rebuild dataset (drop NaNs and re-sample)
+    dataset = pd.concat([Y, X], axis=1).dropna().iloc[::return_period, :]
+
+
+    
     #dataset.to_csv(r"./test_data.csv")
     features = dataset.sort_index()
     features = features.reset_index(drop=True)
@@ -66,6 +104,7 @@ def get_bitcoin_historical_prices(days = 60):
     df['Date'] = pd.to_datetime(df['Timestamp'], unit='ms').dt.normalize()
     df = df[['Date', 'Close Price (USD)']].set_index('Date')
     return df
+
 
 
 
