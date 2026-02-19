@@ -59,8 +59,9 @@ MODEL_INFO = {
         "endpoint": aws_endpoint,
         "explainer": 'explainer.shap',
         "pipeline": 'finalized_model.tar.gz',
-        "keys": ["PANW", "UBER", "DEXJPUS", "DEXUSUK", "SP500", "DJIA", "VIXCLS"],
-        "inputs": [{"name": k, "type": "number", "min": -1.0, "max": 1.0, "default": 0.0, "step": 0.01} for k in ["PANW", "UBER", "DEXJPUS", "DEXUSUK", "SP500", "DJIA", "VIXCLS"]]
+    #increased features list
+        "keys": ["PANW", "UBER", "DEXJPUS", "DEXUSUK", "SP500", "DJIA", "VIXCLS", "HL_Diff", "OC_Diff", "HC_Diff", "CL_Diff", "end_of_quarter"],
+        "inputs": [{"name": k, "type": "number", "min": -1.0, "max": 1.0, "default": 0.0, "step": 0.01} for k in ["PANW", "UBER", "DEXJPUS", "DEXUSUK", "SP500", "DJIA", "VIXCLS", "HL_Diff", "OC_Diff", "HC_Diff", "CL_Diff", "end_of_quarter"]]
 }
 
 def load_pipeline(_session, bucket, key):
@@ -151,6 +152,7 @@ if submitted:
         display_explanation(input_df,session, aws_bucket)
     else:
         st.error(res)
+
 
 
 
