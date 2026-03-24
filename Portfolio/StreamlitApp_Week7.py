@@ -59,6 +59,7 @@ MODEL_INFO = {
         "endpoint": aws_endpoint,
         "explainer": 'explainer_pair.shap',
         "pipeline": 'finalized_pair_model.tar.gz',
+    #PAIR MUST BE CONSISTENT WITH THE ONE IN THE NOTEBOOK
         "keys": ["AAPL", "AME"],
         "inputs": [{"name": k, "type": "number", "min": 0.0, "default": 0.0, "step": 10.0} for k in ["AAPL", "AME"]]
 }
