@@ -60,8 +60,8 @@ MODEL_INFO = {
         "explainer": 'explainer_pair.shap',
         "pipeline": 'finalized_pair_model.tar.gz',
     #PAIR MUST BE CONSISTENT WITH THE ONE IN THE NOTEBOOK
-        "keys": ["AAPL", "AME"],
-        "inputs": [{"name": k, "type": "number", "min": 0.0, "default": 0.0, "step": 10.0} for k in ["AAPL", "AME"]]
+        "keys": ["PANW", "ALL"],
+        "inputs": [{"name": k, "type": "number", "min": 0.0, "default": 0.0, "step": 10.0} for k in ["PANW", "ALL"]]
 }
 
 def load_pipeline(_session, bucket, key):
