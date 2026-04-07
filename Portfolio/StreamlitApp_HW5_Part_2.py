@@ -115,7 +115,8 @@ def display_explanation(input_df, session, aws_bucket):
     input_df = convert_input_pca_regression(raw_json_input, 'application/json')
 
     best_pipeline = load_pipeline(session, aws_bucket, 'sklearn-pipeline-deployment')
-    
+
+    #might need to change indexes depending on pipeline steps
     preprocessing_pipeline = Pipeline(steps=best_pipeline.steps[0:2]) 
     input_df_transformed = preprocessing_pipeline.transform(input_df) 
     feature_names = best_pipeline[0:2].get_feature_names_out() 
