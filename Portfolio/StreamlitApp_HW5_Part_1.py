@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 import posixpath
+import json
 
 import joblib
 import tarfile
@@ -114,14 +115,15 @@ def display_explanation(input_df, session, aws_bucket):
     explainer_name = MODEL_INFO["explainer"]
     explainer = load_shap_explainer(session, aws_bucket, posixpath.join('explainer', explainer_name),os.path.join(tempfile.gettempdir(), explainer_name))
     
-    dataset = pd.read_csv(r'./SP500Data.csv',index_col=0)
+    dataset = pd.read_csv(r'Portfolio/SP500Data.csv',index_col=0)
     random = 'IBM'
-    random_price = json.loads(request_body)[random]
+    target='MSFT'
+    random_price = input_df[random]
     closest_date = (dataset[random] - float(random_price)).abs().idxmin()
 
     return_period = 5
 
-    X = np.log(dataset.drop([random],axis=1)).diff(return_period)
+    X = np.log(dataset.drop([target],axis=1)).diff(return_period)
     X = np.exp(X).cumsum()
     X.columns = [name + "_CR_Cum" for name in X.columns]
 
