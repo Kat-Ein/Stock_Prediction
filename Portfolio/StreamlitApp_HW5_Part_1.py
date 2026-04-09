@@ -129,13 +129,15 @@ def display_explanation(input_df, session, aws_bucket):
 
     input_df = X.loc[[closest_date]]
 
-    preprocessing_pipeline = Pipeline(steps=best_pipeline.steps[0:2])
+    best_pipeline = load_pipeline(session, aws_bucket, 'sklearn-pipeline-deployment')
+
+    preprocessing_pipeline = Pipeline(steps=best_pipeline.steps[0:3])
     input_df_transformed = preprocessing_pipeline.transform(input_df)
-    feature_names = best_pipeline[0:2].get_feature_names_out()
+    feature_names = best_pipeline[0:3].get_feature_names_out()
     input_df_transformed = pd.DataFrame(input_df_transformed, columns=feature_names)
     shap_values = explainer(input_df_transformed)
 
-    best_pipeline = load_pipeline(session, aws_bucket, 'sklearn-pipeline-deployment')
+    
 
     ######ask about block below
    # shap_values = explainer(input_df)
