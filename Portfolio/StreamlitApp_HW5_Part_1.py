@@ -62,8 +62,8 @@ MODEL_INFO = {
         "explainer": 'explainer_pca.shap',
         "pipeline": 'finalized_pca_model.tar.gz',
     #increased features list
-        "keys": ["IBM"],
-        "inputs": [{"name": k, "type": "number", "min": 0.0, "default": 100.0, "step": 10.0} for k in ["IBM"]]
+        "keys": ["PANW"],
+        "inputs": [{"name": k, "type": "number", "min": 0.0, "default": 100.0, "step": 10.0} for k in ["PANW"]]
 }
 
 def load_pipeline(_session, bucket, key):
@@ -117,7 +117,7 @@ def display_explanation(input_df, session, aws_bucket):
     
     dataset = pd.read_csv(r'Portfolio/SP500Data.csv',index_col=0)
     random = 'IBM'
-    target='MSFT'
+    target='PANW'
     random_price = input_df[random]
     closest_date = (dataset[random] - float(random_price)).abs().idxmin()
 
