@@ -62,8 +62,8 @@ MODEL_INFO = {
         "explainer": 'explainer_pca.shap',
         "pipeline": 'finalized_pca_model.tar.gz',
     #increased features list
-        "keys": ["PANW"],
-        "inputs": [{"name": k, "type": "number", "min": 0.0, "default": 100.0, "step": 10.0} for k in ["PANW"]]
+        "keys": ["IBM"],
+        "inputs": [{"name": k, "type": "number", "min": 0.0, "default": 100.0, "step": 10.0} for k in ["IBM"]]
 }
 
 def load_pipeline(_session, bucket, key):
