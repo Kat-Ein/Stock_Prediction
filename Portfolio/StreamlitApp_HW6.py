@@ -61,7 +61,7 @@ df_features = extract_features()
 
 MODEL_INFO = {
         "endpoint": aws_endpoint,
-        "explainer": 'explainer_sentiment_2.shap.shap',
+        "explainer": 'explainer_sentiment_2.shap',
         "pipeline": 'finalized_sentiment_model.tar.gz',
         "keys": ['ADBE', 'AMZN', 'MSFT', 'sentiment_textblob', 'EMA_5', 'MA_5', 'RSI_5',
        'ROC_5', 'MOM_5'],
