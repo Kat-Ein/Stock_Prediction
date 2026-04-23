@@ -63,9 +63,9 @@ MODEL_INFO = {
         "endpoint": aws_endpoint,
         "explainer": 'explainer_sentiment.shap',
         "pipeline": 'finalized_sentiment_model.tar.gz',
-        "keys": [ADBE', 'AMZN', 'MSFT', 'sentiment_textblob', 'EMA_5', 'MA_5', 'RSI_5',
+        "keys": ['ADBE', 'AMZN', 'MSFT', 'sentiment_textblob', 'EMA_5', 'MA_5', 'RSI_5',
        'ROC_5', 'MOM_5']],
-        "inputs": [{"name": k, "type": "number", "min": -1.0, "max": 1.0, "default": 0.0, "step": 0.01} for k in [ADBE', 'AMZN', 'MSFT', 'sentiment_textblob', 'EMA_5', 'MA_5', 'RSI_5',
+        "inputs": [{"name": k, "type": "number", "min": -1.0, "max": 1.0, "default": 0.0, "step": 0.01} for k in ['ADBE', 'AMZN', 'MSFT', 'sentiment_textblob', 'EMA_5', 'MA_5', 'RSI_5',
        'ROC_5', 'MOM_5']]]
 }
 
