@@ -68,9 +68,9 @@ sm_session = sagemaker.Session(boto_session=session)
 
 MODEL_INFO = {
     "endpoint"  : aws_endpoint,
-    "explainer" : "explainer_fraud.shap",
-    "pipeline"  : "fine_tuned_pipeline.tar.gz",
-    "keys"      : ['TransactionAmt','addr1','addr2'],
+    "explainer" : "explainer_fraud.shap", #ensure name is correct
+    "pipeline"  : "fine_tuned_pipeline.tar.gz", #ensure name is correct
+    "keys"      : ['TransactionAmt','addr1','addr2'], #ensure keys are correct
     "inputs"    : [{"name": k, "type": "number", "min": -1.0, "max": 1.0, "default": 0.0, "step": 0.01} for k in ['TransactionAmt','addr1','addr2']]
 }
 
