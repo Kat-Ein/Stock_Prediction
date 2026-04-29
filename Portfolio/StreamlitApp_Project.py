@@ -1,137 +1,363 @@
-import os, sys, warnings, types
+import os, sys, warnings
+
 import numpy as np
+
 import pandas as pd
+
 import streamlit as st
+
+import matplotlib.pyplot as plt
+
+import posixpath
+
+ 
+
 import joblib
+
 import tarfile
+
 import tempfile
+
+ 
+
 import boto3
+
 import sagemaker
-import __main__
+
 from sagemaker.predictor import Predictor
+
+from sagemaker.serializers import CSVSerializer
+
 from sagemaker.serializers import JSONSerializer
+
+from sagemaker.deserializers import JSONDeserializer
+
+from sagemaker.serializers import NumpySerializer
+
 from sagemaker.deserializers import NumpyDeserializer
-from sklearn.base import BaseEstimator, TransformerMixin
 
-# --- 1. VIRTUAL MODULE HACK (Fixes ModuleNotFoundError for Custom Classes) ---
-m = types.ModuleType('src.Custom_Classes')
-sys.modules['src.Custom_Classes'] = m
+ 
 
-# --- 2. CUSTOM CLASS DEFINITIONS (Must match your training notebook) ---
-class DataCleaner(BaseEstimator, TransformerMixin):
-    def __init__(self, missing_threshold=0.80):
-        self.missing_threshold = missing_threshold
-    def fit(self, X, y=None): return self
-    def transform(self, X):
-        X = pd.DataFrame(X).copy()
-        X.columns = X.columns.str.strip().str.lower().str.replace(' ', '_')
-        return X
+ 
 
-class FraudFeatureExtractor(BaseEstimator, TransformerMixin):
-    def __init__(self): self.amt_median_ = None
-    def fit(self, X, y=None): return self
-    def transform(self, X): return X
+from sklearn.pipeline import Pipeline
 
-# Link classes to the fake module and __main__ for joblib/pickle safety
-m.DataCleaner = DataCleaner
-m.FraudFeatureExtractor = FraudFeatureExtractor
-__main__.DataCleaner = DataCleaner
-__main__.FraudFeatureExtractor = FraudFeatureExtractor
+import shap
 
-# --- 3. CONFIGURATION & DATA ---
-st.set_page_config(page_title="Fraud Detection System", layout="wide")
+ 
+
+from joblib import dump
+
+from joblib import load
+
+ 
+
+# Setup & Path Configuration
+
 warnings.simplefilter("ignore")
 
-# Setup paths
+ 
+
+# Fix path for Streamlit Cloud (ensure 'src' is findable)
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
+
 project_root = os.path.abspath(os.path.join(current_dir, '..'))
+
+if project_root not in sys.path:
+
+    sys.path.append(project_root)
+
+ 
+
+#from src.feature_utils import extract_features
+
+#from src.Custom_Classes import DropHighMissingCols, TransactionFeatureEngineer, DropHighCorrelation
+
+ 
+
 file_path = os.path.join(project_root, 'Portfolio/X_train.csv')
 
-# Load the template (380 columns)
-@st.cache_data
-def load_template():
-    df = pd.read_csv(file_path, index_col=0)
-    # Remove index/unnamed columns
-    df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-    return df
+ 
 
-dataset = load_template()
+dataset = pd.read_csv(file_path, index_col=0)
 
-# AWS Secrets
-aws_credentials = st.secrets["aws_credentials"]
-session = boto3.Session(
-    aws_access_key_id=aws_credentials["AWS_ACCESS_KEY_ID"],
-    aws_secret_access_key=aws_credentials["AWS_SECRET_ACCESS_KEY"],
-    aws_session_token=aws_credentials["AWS_SESSION_TOKEN"],
-    region_name='us-east-1'
-)
+#dataset = dataset.drop(['unnamed:_0.1'],axis=1)
+
+#dataset = dataset.loc[:, ~dataset.columns.str.contains('^Unnamed')]
+
+ 
+
+# Access the secrets
+
+aws_id = st.secrets["aws_credentials"]["AWS_ACCESS_KEY_ID"]
+
+aws_secret = st.secrets["aws_credentials"]["AWS_SECRET_ACCESS_KEY"]
+
+aws_token = st.secrets["aws_credentials"]["AWS_SESSION_TOKEN"]
+
+aws_bucket = st.secrets["aws_credentials"]["AWS_BUCKET"]
+
+aws_endpoint = st.secrets["aws_credentials"]["AWS_ENDPOINT"]
+
+ 
+
+# AWS Session Management
+
+@st.cache_resource # Use this to avoid downloading the file every time the page refreshes
+
+def get_session(aws_id, aws_secret, aws_token):
+
+    return boto3.Session(
+
+        aws_access_key_id=aws_id,
+
+        aws_secret_access_key=aws_secret,
+
+        aws_session_token=aws_token,
+
+        region_name='us-east-1'
+
+    )
+
+ 
+
+session = get_session(aws_id, aws_secret, aws_token)
+
 sm_session = sagemaker.Session(boto_session=session)
 
-# --- 4. PREDICTION LOGIC (FIXED: 328-COLUMN TRUNCATION) ---
-def call_model_api(user_inputs):
+ 
+
+# Data & Model Configuration
+
+ 
+
+MODEL_INFO = {
+
+    "endpoint"  : aws_endpoint,
+
+    "explainer" : "explainer_pair.shap",
+
+    "pipeline"  : "finalized_fraud_model.tar.gz",
+
+    "keys"      : ['transactionamt','transactionhour','hightransactionamt','v92'],
+
+    "inputs"    : [{"name": k, "type": "number", "min": -1.0, "max": 1.0, "default": 0.0, "step": 0.01} for k in ['transactionamt','transactionhour','hightransactionamt','v92']]
+
+}
+
+ 
+
+ 
+
+def load_pipeline(_session, bucket, key):
+
+    s3_client = _session.client('s3')
+
+    filename=MODEL_INFO["pipeline"]
+
+ 
+
+    s3_client.download_file(
+
+        Filename=filename,
+
+        Bucket=bucket,
+
+        Key= f"{key}/{os.path.basename(filename)}")
+
+        # Extract the .joblib file from the .tar.gz
+
+    with tarfile.open(filename, "r:gz") as tar:
+
+        tar.extractall(path=".")
+
+        joblib_file = [f for f in tar.getnames() if f.endswith('.joblib')][0]
+
+        #joblib_file = [f for f in tar.getnames() if f.endswith('.pkl')][0]
+
+  
+
+ 
+
+    # Load the full pipeline
+
+    return joblib.load(f"{joblib_file}")
+
+ 
+
+def load_shap_explainer(_session, bucket, key, local_path):
+
+    s3_client = _session.client('s3')
+
+    local_path = local_path
+
+ 
+
+    # Only download if it doesn't exist locally to save time
+
+    if not os.path.exists(local_path):
+
+        s3_client.download_file(Filename=local_path, Bucket=bucket, Key=key)
+
+ 
+
+    #return load(local_path)
+
+    with open(local_path, "rb") as f:
+
+        return load(f)
+
+     #   return shap.Explainer.load(f)
+
+ 
+
+# Prediction Logic
+
+def call_model_api(input_df):
+
+ 
+
     predictor = Predictor(
-        endpoint_name=aws_credentials["AWS_ENDPOINT"],
+
+        endpoint_name=MODEL_INFO["endpoint"],
+
         sagemaker_session=sm_session,
+
         serializer=JSONSerializer(),
+
         deserializer=NumpyDeserializer()
+
     )
+
     try:
-        # 1. Grab a template row from your local CSV (380 columns)
-        df_full = dataset.iloc[0:1].copy()
-        
-        # 2. Map user inputs to the template
-        for key, val in user_inputs.items():
-            if key in df_full.columns:
-                df_full[key] = val
-        
-        # 3. THE FIX: Truncate to exactly 328 columns 
-        # This matches the 'SelectKBest' requirement on the AWS side
-        df_final = df_full.iloc[:, :328]
-        
-        # 4. Send to SageMaker as a record
-        raw_pred = predictor.predict(df_final.to_dict(orient='records'))
-        
-        # 5. Process result
-        pred_val = np.array(raw_pred).flatten()[0]
-        label = "Fraudulent" if int(float(pred_val)) == 1 else "Legitimate"
-        return label, 200
+
+        raw_pred = predictor.predict(input_df)
+
+        pred_val = pd.DataFrame(raw_pred).values[-1][0]
+
+        #mapping = {0: "SELL", 1: "HOLD", 2: "BUY"}
+
+        mapping = {0: "Legitimate", 1: "Fraud"}
+
+        return mapping.get(pred_val), 200
+
     except Exception as e:
-        return f"AWS Endpoint Error: {str(e)}", 500
 
-# --- 5. STREAMLIT UI ---
-st.title("🛡️ Fraud Detection Deployment")
-st.markdown("---")
+        return f"Error: {str(e)}", 500
 
-with st.form("input_form"):
-    st.subheader("Transaction Details")
-    c1, c2 = st.columns(2)
-    
-    with c1:
-        amt = st.number_input("TRANSACTION AMOUNT", value=100.00)
-        hour = st.number_input("TRANSACTION HOUR (0-23)", value=12.0)
-    with c2:
-        high_amt = st.selectbox("IS HIGH TRANSACTION? (0=No, 1=Yes)", [0, 1])
-        v92 = st.number_input("V92 FEATURE VALUE", value=0.0)
-    
-    submitted = st.form_submit_button("Analyze Transaction")
+ 
+
+# Local Explainability
+
+def display_explanation(input_df, session, aws_bucket):
+
+    explainer_name = MODEL_INFO["explainer"]
+
+    explainer = load_shap_explainer(session, aws_bucket, posixpath.join('explainer', explainer_name),os.path.join(tempfile.gettempdir(), explainer_name))
+
+  
+
+    best_pipeline = load_pipeline(session, aws_bucket, 'sklearn-pipeline-deployment')
+
+    preprocessing_steps = [
+
+    (name, step) for name, step in best_pipeline.steps
+
+    if name not in ['sampler', 'model']]
+
+    preprocessing_pipeline = Pipeline(preprocessing_steps)
+
+    input_df=pd.DataFrame(input_df)
+
+    input_df_transformed = preprocessing_pipeline.transform(input_df)
+
+    X_temp = preprocessing_pipeline.named_steps['cleaner'].transform(dataset)
+
+    X_temp = preprocessing_pipeline.named_steps['feature_engineer'].transform(X_temp)
+
+    selector = preprocessing_pipeline.named_steps['feature_selection']
+
+    feature_names = X_temp.columns[selector.get_support()]
+
+    input_df_transformed = pd.DataFrame(input_df_transformed, columns=feature_names)
+
+    model = best_pipeline.named_steps['model']
+
+    explainer = shap.Explainer(model, input_df_transformed)
+
+    shap_values = explainer(input_df_transformed)
+
+  
+
+    st.subheader("🔍 Decision Transparency (SHAP)")
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+
+    shap.plots.waterfall(shap_values[0, :, 1])  # class 1 = fraud
+
+    st.pyplot(fig)
+
+    top_feature = pd.Series(shap_values[0, :, 1].values, index=shap_values[0, :, 1].feature_names).abs().idxmax()
+
+    st.info(f"**Business Insight:** The most influential factor in this decision was **{top_feature}**.")
+
+ 
+
+ 
+
+# Streamlit UI
+
+st.set_page_config(page_title="ML Deployment", layout="wide")
+
+st.title("👨‍💻 ML Deployment")
+
+ 
+
+with st.form("pred_form"):
+
+    st.subheader(f"Inputs")
+
+    cols = st.columns(2)
+
+    user_inputs = {}
+
+  
+
+    for i, inp in enumerate(MODEL_INFO["inputs"]):
+
+        with cols[i % 2]:
+
+            user_inputs[inp['name']] = st.number_input(
+
+                inp['name'].replace('_', ' ').upper(),
+
+                min_value=inp['min'], max_value=inp['max'], value=inp['default'], step=inp['step']
+
+            )
+
+  
+
+    submitted = st.form_submit_button("Run Prediction")
+
+ 
+
+original = dataset.iloc[0:1].to_dict()
+
+original.update(user_inputs)
 
 if submitted:
-    # Match the keys exactly to your CSV column names
-    user_data = {
-        'transactionamt': amt,
-        'transactionhour': hour,
-        'hightransactionamt': high_amt,
-        'v92': v92
-    }
-    
-    with st.spinner("Analyzing transaction on AWS SageMaker..."):
-        result, status = call_model_api(user_data)
-        
+
+ 
+
+    res, status = call_model_api(original)
+
     if status == 200:
-        color = "red" if result == "Fraudulent" else "green"
-        st.markdown(f"### Result: :{color}[{result}]")
+
+        st.metric("Prediction Result", res)
+
+        display_explanation(original,session, aws_bucket)
+
     else:
-        st.error(result)
-        # Helpful reminder for Lab users
-        if "ExpiredToken" in result:
-            st.warning("Your AWS Session Token has expired. Please refresh your credentials in Streamlit secrets.")
+
+        st.error(res)
