@@ -126,7 +126,8 @@ def call_model_api(input_df):
     except Exception as e:
         return f"Error: {str(e)}", 500'''
     # Prediction Logic
-def call_model_api(input_df):
+# Prediction Logic
+def call_model_api(input_dict):
     predictor = Predictor(
         endpoint_name=MODEL_INFO["endpoint"],
         sagemaker_session=sm_session,
@@ -135,21 +136,27 @@ def call_model_api(input_df):
     )
 
     try:
-        # 1. Convert input to DataFrame if it's a dict
-        if isinstance(input_df, dict):
-            input_df = pd.DataFrame([input_df])
-        
-        # 2. Fix the productcd_count error by matching training columns
+        # 1. Ensure we have a DataFrame with all training columns
+        # This handles the 'productcd_count' error from your logs
+        input_df = pd.DataFrame([input_dict])
         input_df = input_df.reindex(columns=dataset.columns, fill_value=0.0)
         
+        # 2. Convert to the specific JSON format the server expects: 
+        # A list of records [{col1: val1, col2: val2}]
+        data_to_send = input_df.to_dict(orient='records')
+
         # 3. Send to endpoint
-        raw_pred = predictor.predict(input_df.to_dict(orient='records'))
+        raw_pred = predictor.predict(data_to_send)
         
-        # 4. Extract result
-        pred_val = pd.DataFrame(raw_pred).values[-1][0]
-        
+        # 4. Extract the prediction value safely
+        if isinstance(raw_pred, (list, np.ndarray)):
+            # If it's a 2D array [[val]], get the first element
+            pred_val = raw_pred[0][0] if np.array(raw_pred).ndim > 1 else raw_pred[0]
+        else:
+            pred_val = raw_pred
+            
         mapping = {0: "Legitimate", 1: "Fraud"}
-        return mapping.get(int(pred_val)), 200
+        return mapping.get(int(float(pred_val)), "Unknown"), 200
         
     except Exception as e:
         return f"Error: {str(e)}", 500
