@@ -108,6 +108,7 @@ def load_shap_explainer(_session, bucket, key, local_path):
      #   return shap.Explainer.load(f)
 
 # Prediction Logic
+'''
 def call_model_api(input_df):
 
     predictor = Predictor(
@@ -121,6 +122,28 @@ def call_model_api(input_df):
         raw_pred = predictor.predict(input_df)
         pred_val = pd.DataFrame(raw_pred).values[-1][0]
         #mapping = {0: "SELL", 1: "HOLD", 2: "BUY"}
+        mapping = {0: "Legitimate", 1: "Fraud"}
+        return mapping.get(pred_val), 200
+    except Exception as e:
+        return f"Error: {str(e)}", 500
+'''
+# Prediction Logic
+def call_model_api(input_dict):
+    predictor = Predictor(
+        endpoint_name=MODEL_INFO["endpoint"],
+        sagemaker_session=sm_session,
+        serializer=CSVSerializer(), # Change to CSV for better compatibility
+        deserializer=NumpyDeserializer()
+    )
+
+    try:
+        # Convert the dictionary to a DataFrame to ensure column order
+        input_df = pd.DataFrame([input_dict])
+        
+        # Send ONLY the values (as CSV) to the endpoint
+        raw_pred = predictor.predict(input_df.values) 
+        
+        pred_val = raw_pred[0]
         mapping = {0: "Legitimate", 1: "Fraud"}
         return mapping.get(pred_val), 200
     except Exception as e:
