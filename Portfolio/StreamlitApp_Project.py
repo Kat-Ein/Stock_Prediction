@@ -134,33 +134,45 @@ def call_model_api(input_dict):
     predictor = Predictor(
         endpoint_name=MODEL_INFO["endpoint"],
         sagemaker_session=sm_session,
-        serializer=JSONSerializer(), # Switch back to JSON to match the model's expected record format
+        serializer=JSONSerializer(),
         deserializer=NumpyDeserializer()
     )
     try:
-        # 1. Grab the VERY FIRST row from your training CSV as a template
-        # This ensures all 'productcd_count' etc. have REAL valid data
-        template_row = dataset.iloc[0:1].copy()
+        # 1. Prepare the template from your dataset
+        # We strip 'Unnamed' columns to ensure feature names match the model exactly
+        df_template = dataset.loc[:, ~dataset.columns.str.contains('^Unnamed')].iloc[0:1].copy()
         
-        # 2. Update the template with ONLY the values the user typed in the UI
-        # We lowercase the input keys to match the CSV if needed
+        # 2. Update the template with user inputs
+        # We loop through the dict to place user values in the correct columns
         for key, value in input_dict.items():
-            if key in template_row.columns:
-                template_row[key] = value
+            if key in df_template.columns:
+                df_template[key] = value
+            elif key.lower() in df_template.columns: # Handle case sensitivity
+                df_template[key.lower()] = value
 
-        # 3. Send the template row as a list of records
-        # This is the most "natural" format for a SageMaker Scikit-Learn pipeline
-        data_to_send = template_row.to_dict(orient='records')
-        
+        # 3. Send the updated row as a record
+        data_to_send = df_template.to_dict(orient='records')
         raw_pred = predictor.predict(data_to_send)
         
-        # 4. Parse result
+        # 4. Handle prediction result
         pred_val = np.array(raw_pred).flatten()[0]
         mapping = {0: "Legitimate", 1: "Fraud"}
         return mapping.get(int(float(pred_val)), "Unknown"), 200
         
     except Exception as e:
         return f"Error: {str(e)}", 500
+
+# --- UI LOGIC AT THE BOTTOM ---
+if submitted:
+    # Ensure user_inputs is a clean dictionary
+    # We don't need to wrap it in another dictionary or list here
+    res, status = call_model_api(user_inputs) 
+    
+    if status == 200:
+        st.metric("Prediction Result", res)
+        # display_explanation(user_inputs, session, aws_bucket)
+    else:
+        st.error(res)
 
 # Local Explainability
 def display_explanation(input_dict, session, aws_bucket):
