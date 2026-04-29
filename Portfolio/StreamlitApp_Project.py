@@ -214,36 +214,41 @@ def load_shap_explainer(_session, bucket, key, local_path):
 
 # Prediction Logic
 
-def call_model_api(input_df):
-
- 
-
+def call_model_api(input_dict):
     predictor = Predictor(
-
-        endpoint_name=MODEL_INFO["endpoint"],
-
+        endpoint_name=aws_credentials["AWS_ENDPOINT"],
         sagemaker_session=sm_session,
-
         serializer=JSONSerializer(),
-
         deserializer=NumpyDeserializer()
-
     )
-
     try:
+        # 1. Start with one real row from your CSV (381 columns)
+        # We remove 'Unnamed' columns first
+        df_template = dataset.loc[:, ~dataset.columns.str.contains('^Unnamed')].iloc[0:1].copy()
+        
+        # 2. Update the template with user inputs
+        # This loop handles the capitalization (e.g., maps 'v92' to 'V92')
+        for key, value in input_dict.items():
+            # Find the actual column name in the CSV that matches (ignoring case)
+            actual_col = next((c for c in df_template.columns if c.lower() == key.lower()), None)
+            if actual_col:
+                df_template[actual_col] = value
 
-        raw_pred = predictor.predict(input_df)
-
-        pred_val = pd.DataFrame(raw_pred).values[-1][0]
-
-        #mapping = {0: "SELL", 1: "HOLD", 2: "BUY"}
-
+        # 3. CRITICAL: Force the 328-column limit
+        # This matches what your SelectKBest step is crying for
+        df_final = df_template.iloc[:, :328]
+        
+        # 4. Convert to records and send
+        # We DO NOT add 'productcd_count' here anymore
+        data_to_send = df_final.to_dict(orient='records')
+        raw_pred = predictor.predict(data_to_send)
+        
+        # 5. Parse result
+        pred_val = np.array(raw_pred).flatten()[0]
         mapping = {0: "Legitimate", 1: "Fraud"}
-
-        return mapping.get(pred_val), 200
-
+        return mapping.get(int(float(pred_val)), "Unknown"), 200
+        
     except Exception as e:
-
         return f"Error: {str(e)}", 500
 
  
