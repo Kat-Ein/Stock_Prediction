@@ -96,7 +96,7 @@ def load_shap_explainer(_session, bucket, key, local_path):
     if not os.path.exists(local_path):
         s3_client.download_file(Filename=local_path, Bucket=bucket, Key=key)
     return joblib.load(local_path) # Changed to joblib for .shap files
-
+'''
 def call_model_api(input_dict):
     predictor = Predictor(
         endpoint_name=MODEL_INFO["endpoint"],
@@ -124,6 +124,51 @@ def call_model_api(input_dict):
         # 5. Handle result
         pred_val = np.array(raw_pred).flatten()[0]
         mapping = {0: "Legitimate", 1: "Fraud"}
+        return mapping.get(int(float(pred_val)), "Unknown"), 200
+        
+    except Exception as e:
+        return f"Error: {str(e)}", 500
+'''
+# Prediction Logic
+def call_model_api(input_dict):
+    predictor = Predictor(
+        endpoint_name=MODEL_INFO["endpoint"],
+        sagemaker_session=sm_session,
+        serializer=JSONSerializer(),
+        deserializer=NumpyDeserializer()
+    )
+    try:
+        # 1. Convert the user input dictionary to a DataFrame
+        input_df = pd.DataFrame([input_dict])
+        
+        # 2. Reindex against your current 328-column dataset
+        # This aligns the user inputs to the right column names
+        input_df = input_df.reindex(columns=dataset.columns, fill_value=0.0)
+        
+        # 3. FORCE the count to 380 to satisfy SelectKBest
+        # This pads the missing 52 columns with zeros
+        current_feature_count = input_df.shape[1]
+        target_feature_count = 380
+        
+        if current_feature_count < target_feature_count:
+            missing_cols = target_feature_count - current_feature_count
+            # Create a dataframe of zeros for the missing columns
+            padding = pd.DataFrame(
+                np.zeros((1, missing_cols)), 
+                columns=[f"pad_{i}" for i in range(missing_cols)]
+            )
+            # Concatenate the padding to the input
+            input_df = pd.concat([input_df.reset_index(drop=True), padding], axis=1)
+        
+        # 4. Send to SageMaker as a list of records
+        # This format allows the server-side pipeline to see the feature count
+        raw_pred = predictor.predict(input_df.to_dict(orient='records'))
+        
+        # 5. Extract result and map it
+        # flatten handles variations in how AWS returns the array
+        pred_val = np.array(raw_pred).flatten()[0]
+        mapping = {0: "Legitimate", 1: "Fraud"}
+        
         return mapping.get(int(float(pred_val)), "Unknown"), 200
         
     except Exception as e:
