@@ -108,7 +108,8 @@ def load_shap_explainer(_session, bucket, key, local_path):
      #   return shap.Explainer.load(f)
 
 # Prediction Logic
-def call_model_api(original):
+'''
+def call_model_api(input_df):
 
     predictor = Predictor(
         endpoint_name=MODEL_INFO["endpoint"],
@@ -116,7 +117,7 @@ def call_model_api(original):
         serializer=JSONSerializer(),
         deserializer=NumpyDeserializer()
     )
-    '''try:
+    try:
         raw_pred = predictor.predict(input_df)
         pred_val = pd.DataFrame(raw_pred).values[-1][0]
         #mapping = {0: "SELL", 1: "HOLD", 2: "BUY"}
@@ -124,26 +125,31 @@ def call_model_api(original):
         return mapping.get(pred_val), 200
     except Exception as e:
         return f"Error: {str(e)}", 500'''
+    # Prediction Logic
+def call_model_api(input_df):
+    predictor = Predictor(
+        endpoint_name=MODEL_INFO["endpoint"],
+        sagemaker_session=sm_session,
+        serializer=JSONSerializer(),
+        deserializer=NumpyDeserializer()
+    )
+
     try:
-        # 1. Convert the user input dictionary to a DataFrame
-        input_df = pd.DataFrame([input_dict])
+        # 1. Convert input to DataFrame if it's a dict
+        if isinstance(input_df, dict):
+            input_df = pd.DataFrame([input_df])
         
-        # 2. Match the training columns EXACTLY (fixes the productcd_count error)
-        # This fills all 300+ missing columns with 0.0 automatically
+        # 2. Fix the productcd_count error by matching training columns
         input_df = input_df.reindex(columns=dataset.columns, fill_value=0.0)
         
-        # 3. Send the data to the endpoint
-        # We send the records format to ensure the JSON structure is correct
+        # 3. Send to endpoint
         raw_pred = predictor.predict(input_df.to_dict(orient='records'))
         
-        # 4. Process result (NumpyDeserializer usually returns a list/array)
-        if isinstance(raw_pred, (list, np.ndarray)):
-            pred_val = raw_pred[0]
-        else:
-            pred_val = raw_pred
-
+        # 4. Extract result
+        pred_val = pd.DataFrame(raw_pred).values[-1][0]
+        
         mapping = {0: "Legitimate", 1: "Fraud"}
-        return mapping.get(int(pred_val), "Unknown"), 200
+        return mapping.get(int(pred_val)), 200
         
     except Exception as e:
         return f"Error: {str(e)}", 500
