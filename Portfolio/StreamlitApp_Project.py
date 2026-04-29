@@ -25,18 +25,16 @@ import shap
 from joblib import dump
 from joblib import load
 ####
-import os
 import sys
+import os
 
-# 1. Force Python to look in the current directory for custom_classes.py
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Get the path to the folder where THIS script is running (the Portfolio folder)
+current_folder = os.path.dirname(os.path.abspath(__file__))
+if current_folder not in sys.path:
+    sys.path.append(current_folder)
 
-# 2. Import your specific classes (ensure names match your file)
-try:
-    from Custom_Classes import DropHighMissingCols, TransactionFeatureEngineer, DropHighCorrelation
-except ImportError:
-    # Try lowercase if your filename is lowercase
-    from custom_classes import DropHighMissingCols, TransactionFeatureEngineer, DropHighCorrelation
+# Now try the import again
+from custom_classes import DropHighMissingCols, TransactionFeatureEngineer, DropHighCorrelation
 ######
 
 
