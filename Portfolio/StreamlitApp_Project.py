@@ -210,9 +210,17 @@ def load_shap_explainer(_session, bucket, key, local_path):
 
      #   return shap.Explainer.load(f)
 
- 
-
 # Prediction Logic
+That error means we finally cracked the 500 error and got a response from AWS, but the response is a "package" (a dictionary) rather than just a raw number. Your code is currently trying to do math on the whole package instead of looking inside it.
+
+The model is likely returning something like {'predictions': [0]} or {'instances': [0]}.
+
+The "Smart Extractor" Fix
+We need to update the prediction parsing to be flexible. This version checks if the result is a dictionary, finds the data inside, and flattens it into a single number.
+
+Replace your call_model_api with this final version:
+
+Python
 def call_model_api(input_dict):
     predictor = Predictor(
         endpoint_name=aws_endpoint,
@@ -221,7 +229,7 @@ def call_model_api(input_dict):
         deserializer=NumpyDeserializer()
     )
     try:
-        # 1. Prepare Template
+        # 1. Prepare Template & Type Casting
         df_template = dataset.loc[:, ~dataset.columns.str.contains('^Unnamed')].iloc[0:1].copy()
         df_template = df_template.apply(pd.to_numeric, errors='coerce').fillna(0)
         
@@ -235,19 +243,15 @@ def call_model_api(input_dict):
         df_final = df_template.iloc[:, :328]
         
         # 4. Predict
-        # We send as a list of lists (numerical array)
         raw_pred = predictor.predict(df_final.values.tolist())
         
-        # 5. FIXED: SMART PARSING OF THE RESPONSE
-        # This handles if the model returns a dict, a list, or a numpy array
-        if isinstance(raw_pred, dict):
-            # If SageMaker returns {'prediction': [0]} or similar
-            first_key = list(raw_pred.keys())[0]
-            pred_val = raw_pred[first_key]
-        else:
-            pred_val = raw_pred
+        # 5. FIXED: "Dig" into the dictionary to find the value
+        pred_val = raw_pred
+        if isinstance(pred_val, dict):
+            # Grab the first available value in the dictionary
+            pred_val = list(pred_val.values())[0]
 
-        # Flatten until we get a single number
+        # Flatten list or array until we reach the base number
         while isinstance(pred_val, (list, np.ndarray)):
             pred_val = pred_val[0]
 
@@ -257,6 +261,7 @@ def call_model_api(input_dict):
         
     except Exception as e:
         return f"Error: {str(e)}", 500
+     
 # Local Explainability
 
 def display_explanation(input_df, session, aws_bucket):
