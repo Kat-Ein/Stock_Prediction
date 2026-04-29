@@ -99,17 +99,29 @@ def load_shap_explainer(_session, bucket, key, local_path):
 
 # Prediction Logic
 def call_model_api(input_dict):
-    predictor = Predictor(endpoint_name=MODEL_INFO["endpoint"], sagemaker_session=sm_session,
-                          serializer=JSONSerializer(), deserializer=NumpyDeserializer())
+    predictor = Predictor(
+        endpoint_name=MODEL_INFO["endpoint"],
+        sagemaker_session=sm_session,
+        serializer=JSONSerializer(),
+        deserializer=NumpyDeserializer()
+    )
     try:
-        # FIX: Align columns with dataset to prevent 'productcd_count' error
+        # 1. Convert the dictionary to a DataFrame
         input_df = pd.DataFrame([input_dict])
+        
+        # 2. Reindex using the dataset (X_train) columns you loaded at the top
+        # This adds 'productcd_count' as 0.0, satisfying the model's requirements
         input_df = input_df.reindex(columns=dataset.columns, fill_value=0.0)
         
+        # 3. Send to SageMaker as a list of records
         raw_pred = predictor.predict(input_df.to_dict(orient='records'))
+        
+        # 4. Extract result and map it
         pred_val = np.array(raw_pred).flatten()[0]
         mapping = {0: "Legitimate", 1: "Fraud"}
-        return mapping.get(int(float(pred_val))), 200
+        
+        return mapping.get(int(float(pred_val)), "Unknown"), 200
+        
     except Exception as e:
         return f"Error: {str(e)}", 500
 
