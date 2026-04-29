@@ -13,6 +13,8 @@ from sklearn.impute import SimpleImputer
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline
 
+from sklearn.base import BaseEstimator, TransformerMixin
+
 # NEW STEP 1: Sanitization (Remove features with zero variance)
 from sklearn.feature_selection import VarianceThreshold
 
