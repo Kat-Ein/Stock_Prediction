@@ -102,10 +102,10 @@ def load_shap_explainer(_session, bucket, key, local_path):
     if not os.path.exists(local_path):
         s3_client.download_file(Filename=local_path, Bucket=bucket, Key=key)
 
-    #return load(local_path)
-    with open(local_path, "rb") as f:
+    return load(local_path)
+    #with open(local_path, "rb") as f:
         #return load(f)
-        return shap.Explainer.load(f)
+     #   return shap.Explainer.load(f)
 
 # Prediction Logic
 def call_model_api(input_df):
