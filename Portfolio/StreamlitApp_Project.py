@@ -69,7 +69,7 @@ sm_session = sagemaker.Session(boto_session=session)
 
 MODEL_INFO = {
     "endpoint"  : aws_endpoint,
-    "explainer" : "explainer_pair1.shap",
+    "explainer" : "explainer_pair.shap",
     "pipeline"  : "finalized_fraud_model.tar.gz",
     "keys"      : ['transactionamt','transactionhour','hightransactionamt','card1_count'],
     "inputs"    : [{"name": k, "type": "number", "min": -1.0, "max": 1.0, "default": 0.0, "step": 0.01} for k in ['transactionamt','transactionhour','hightransactionamt','card1_count']]
@@ -102,10 +102,10 @@ def load_shap_explainer(_session, bucket, key, local_path):
     if not os.path.exists(local_path):
         s3_client.download_file(Filename=local_path, Bucket=bucket, Key=key)
 
-    return load(local_path)
-    #with open(local_path, "rb") as f:
+    #return load(local_path)
+    with open(local_path, "rb") as f:
         #return load(f)
-        #return shap.Explainer.load(f)
+        return shap.Explainer.load(f)
 
 # Prediction Logic
 def call_model_api(input_df):
