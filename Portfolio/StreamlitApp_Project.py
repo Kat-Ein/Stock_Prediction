@@ -116,13 +116,37 @@ def call_model_api(input_df):
         serializer=JSONSerializer(),
         deserializer=NumpyDeserializer()
     )
-
+'''
     try:
         raw_pred = predictor.predict(input_df)
         pred_val = pd.DataFrame(raw_pred).values[-1][0]
         #mapping = {0: "SELL", 1: "HOLD", 2: "BUY"}
         mapping = {0: "Legitimate", 1: "Fraud"}
         return mapping.get(pred_val), 200
+    except Exception as e:
+        return f"Error: {str(e)}", 500
+'''
+try:
+        # 1. Convert the user input dictionary to a DataFrame
+        input_df = pd.DataFrame([input_dict])
+        
+        # 2. Match the training columns EXACTLY (fixes the productcd_count error)
+        # This fills all 300+ missing columns with 0.0 automatically
+        input_df = input_df.reindex(columns=dataset.columns, fill_value=0.0)
+        
+        # 3. Send the data to the endpoint
+        # We send the records format to ensure the JSON structure is correct
+        raw_pred = predictor.predict(input_df.to_dict(orient='records'))
+        
+        # 4. Process result (NumpyDeserializer usually returns a list/array)
+        if isinstance(raw_pred, (list, np.ndarray)):
+            pred_val = raw_pred[0]
+        else:
+            pred_val = raw_pred
+
+        mapping = {0: "Legitimate", 1: "Fraud"}
+        return mapping.get(int(pred_val), "Unknown"), 200
+        
     except Exception as e:
         return f"Error: {str(e)}", 500
 
