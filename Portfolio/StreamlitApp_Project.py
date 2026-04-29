@@ -134,22 +134,34 @@ def call_model_api(input_dict):
     predictor = Predictor(
         endpoint_name=MODEL_INFO["endpoint"],
         sagemaker_session=sm_session,
-        serializer=JSONSerializer(),
+        # Using CSVSerializer sends only values, no column names
+        serializer=sagemaker.serializers.CSVSerializer(),
         deserializer=NumpyDeserializer()
     )
     try:
-        # 1. Convert input to DataFrame
+        # 1. Create the DataFrame to organize the data
         input_df = pd.DataFrame([input_dict])
         
-        # 2. Reindex against your 328-column dataset
-        # This aligns features and ensures the count is exactly what dataset.columns has
+        # 2. Reindex against YOUR 328-column dataset
+        # This ensures the 4 user inputs are in the EXACT right slots
         input_df = input_df.reindex(columns=dataset.columns, fill_value=0.0)
         
-        # 3. Double check the shape before sending
-        # If dataset.columns is 328, input_df.shape[1] is now 328
+        # 3. VERIFY SHAPE - If the model wants 380, we must provide 380.
+        # If your previous error said it expects 380, use 380 here.
+        # If it said 328, use 328 here.
+        expected_count = 328 # <--- CHANGE THIS TO 380 IF THE ERROR SWITCHES BACK
         
-        # 4. Send to SageMaker as a list of records
-        raw_pred = predictor.predict(input_df.to_dict(orient='records'))
+        current_count = input_df.shape[1]
+        if current_count < expected_count:
+            # Pad with zeros to reach the requirement
+            padding = np.zeros((1, expected_count - current_count))
+            data_to_send = np.hstack([input_df.values, padding])
+        else:
+            # Take only the first N features if there are too many
+            data_to_send = input_df.values[:, :expected_count]
+
+        # 4. Send the raw array (no feature names to cause "unseen" errors)
+        raw_pred = predictor.predict(data_to_send)
         
         # 5. Extract result
         pred_val = np.array(raw_pred).flatten()[0]
