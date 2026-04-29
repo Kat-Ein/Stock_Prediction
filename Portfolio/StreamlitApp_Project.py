@@ -211,16 +211,6 @@ def load_shap_explainer(_session, bucket, key, local_path):
      #   return shap.Explainer.load(f)
 
 # Prediction Logic
-That error means we finally cracked the 500 error and got a response from AWS, but the response is a "package" (a dictionary) rather than just a raw number. Your code is currently trying to do math on the whole package instead of looking inside it.
-
-The model is likely returning something like {'predictions': [0]} or {'instances': [0]}.
-
-The "Smart Extractor" Fix
-We need to update the prediction parsing to be flexible. This version checks if the result is a dictionary, finds the data inside, and flattens it into a single number.
-
-Replace your call_model_api with this final version:
-
-Python
 def call_model_api(input_dict):
     predictor = Predictor(
         endpoint_name=aws_endpoint,
