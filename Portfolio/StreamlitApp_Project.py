@@ -106,23 +106,29 @@ def call_model_api(input_dict):
         deserializer=NumpyDeserializer()
     )
     try:
-        # 1. Convert the dictionary to a DataFrame
+        # 1. Load the pipeline to see EXACTLY what features it wants
+        best_pipeline = load_pipeline(session, aws_bucket, 'sklearn-pipeline-deployment')
+        
+        # 2. Create a dummy dataframe from the user input
         input_df = pd.DataFrame([input_dict])
         
-        # 2. Reindex using the dataset (X_train) columns you loaded at the top
-        # This adds 'productcd_count' as 0.0, satisfying the model's requirements
-        input_df = input_df.reindex(columns=dataset.columns, fill_value=0.0)
+        # 3. Use the PREPROCESSOR (everything before the model) to create the features
+        # This will create 'productcd_count' automatically using your FraudFeatureExtractor logic
+        preprocessor = Pipeline([step for step in best_pipeline.steps if step[0] != 'model'])
         
-        # 3. Send to SageMaker as a list of records
-        raw_pred = predictor.predict(input_df.to_dict(orient='records'))
+        # We need a larger dataset to 'fit' the preprocessor if it's not already fitted, 
+        # but since it's loaded from joblib, it should be ready to transform.
+        processed_data = preprocessor.transform(input_df)
         
-        # 4. Extract result and map it
+        # 4. Send the perfectly formatted data to the endpoint
+        raw_pred = predictor.predict(processed_data.to_dict(orient='records'))
+        
         pred_val = np.array(raw_pred).flatten()[0]
         mapping = {0: "Legitimate", 1: "Fraud"}
-        
         return mapping.get(int(float(pred_val)), "Unknown"), 200
         
     except Exception as e:
+        # If that fails, it's likely the transform step. Let's try the safest fallback:
         return f"Error: {str(e)}", 500
 
 # Local Explainability
