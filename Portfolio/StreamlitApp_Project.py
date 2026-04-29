@@ -138,23 +138,26 @@ def call_model_api(input_dict):
         deserializer=NumpyDeserializer()
     )
     try:
-        # 1. Prepare the template from your dataset
-        # We strip 'Unnamed' columns to ensure feature names match the model exactly
+        # 1. Prepare the template from your dataset (currently 380 columns)
         df_template = dataset.loc[:, ~dataset.columns.str.contains('^Unnamed')].iloc[0:1].copy()
         
-        # 2. Update the template with user inputs
-        # We loop through the dict to place user values in the correct columns
+        # 2. Update template with user inputs
         for key, value in input_dict.items():
-            if key in df_template.columns:
-                df_template[key] = value
-            elif key.lower() in df_template.columns: # Handle case sensitivity
-                df_template[key.lower()] = value
+            col_match = next((col for col in df_template.columns if col.lower() == key.lower()), None)
+            if col_match:
+                df_template[col_match] = value
 
-        # 3. Send the updated row as a record
+        # 3. TRUNCATE TO 328 FEATURES
+        # The error says the model expects 328, so we take only the first 328 columns
+        target_count = 328
+        if df_template.shape[1] > target_count:
+            df_template = df_template.iloc[:, :target_count]
+        
+        # 4. Send to SageMaker
         data_to_send = df_template.to_dict(orient='records')
         raw_pred = predictor.predict(data_to_send)
         
-        # 4. Handle prediction result
+        # 5. Parse result
         pred_val = np.array(raw_pred).flatten()[0]
         mapping = {0: "Legitimate", 1: "Fraud"}
         return mapping.get(int(float(pred_val)), "Unknown"), 200
