@@ -108,7 +108,7 @@ def load_shap_explainer(_session, bucket, key, local_path):
      #   return shap.Explainer.load(f)
 
 # Prediction Logic
-def call_model_api(input_df):
+def call_model_api(original):
 
     predictor = Predictor(
         endpoint_name=MODEL_INFO["endpoint"],
