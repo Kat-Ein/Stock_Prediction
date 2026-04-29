@@ -131,41 +131,35 @@ def call_model_api(input_dict):
 '''
 # Prediction Logic
 def call_model_api(input_dict):
-    # We switch to a raw CSV Serializer. This sends NO column names.
-    # This prevents the "Unseen feature names" error entirely.
     predictor = Predictor(
         endpoint_name=MODEL_INFO["endpoint"],
         sagemaker_session=sm_session,
-        serializer=sagemaker.serializers.CSVSerializer(),
-        deserializer=sagemaker.deserializers.JSONDeserializer() # SageMaker often returns JSON by default
+        serializer=JSONSerializer(), # Switch back to JSON to match the model's expected record format
+        deserializer=NumpyDeserializer()
     )
     try:
-        # 1. Align the 4 user inputs with the 328 columns in your X_train.csv
-        input_df = pd.DataFrame([input_dict])
-        input_df = input_df.reindex(columns=dataset.columns, fill_value=0.0)
+        # 1. Grab the VERY FIRST row from your training CSV as a template
+        # This ensures all 'productcd_count' etc. have REAL valid data
+        template_row = dataset.iloc[0:1].copy()
         
-        # 2. Convert to a flat list of values (e.g., [0.1, 0.0, 50.0, ...])
-        # We ensure it is a simple list of floats
-        data_to_send = input_df.values.flatten().tolist()
+        # 2. Update the template with ONLY the values the user typed in the UI
+        # We lowercase the input keys to match the CSV if needed
+        for key, value in input_dict.items():
+            if key in template_row.columns:
+                template_row[key] = value
 
-        # 3. Send to SageMaker
-        # By sending a list to the CSVSerializer, it sends a string: "0.1,0.0,50.0..."
+        # 3. Send the template row as a list of records
+        # This is the most "natural" format for a SageMaker Scikit-Learn pipeline
+        data_to_send = template_row.to_dict(orient='records')
+        
         raw_pred = predictor.predict(data_to_send)
         
-        # 4. Parse the output
-        # Handle if output is a dict, list, or single value
-        if isinstance(raw_pred, dict) and 'predictions' in raw_pred:
-            pred_val = raw_pred['predictions'][0]
-        elif isinstance(raw_pred, list):
-            pred_val = raw_pred[0]
-        else:
-            pred_val = raw_pred
-            
+        # 4. Parse result
+        pred_val = np.array(raw_pred).flatten()[0]
         mapping = {0: "Legitimate", 1: "Fraud"}
         return mapping.get(int(float(pred_val)), "Unknown"), 200
         
     except Exception as e:
-        # This will catch if the error is local (Streamlit) or remote (AWS)
         return f"Error: {str(e)}", 500
 
 # Local Explainability
