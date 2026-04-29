@@ -106,7 +106,6 @@ def load_shap_explainer(_session, bucket, key, local_path):
      #   return shap.Explainer.load(f)
 
 # Prediction Logic
-'''
 def call_model_api(input_df):
 
     predictor = Predictor(
@@ -121,48 +120,6 @@ def call_model_api(input_df):
         #mapping = {0: "SELL", 1: "HOLD", 2: "BUY"}
         mapping = {0: "Legitimate", 1: "Fraud"}
         return mapping.get(pred_val), 200
-    except Exception as e:
-        return f"Error: {str(e)}", 500'''
-    # Prediction Logic
-# Prediction Logic
-def call_model_api(input_dict):
-    predictor = Predictor(
-        endpoint_name=MODEL_INFO["endpoint"],
-        sagemaker_session=sm_session,
-        serializer=JSONSerializer(),
-        deserializer=NumpyDeserializer()
-    )
-
-    try:
-        # 1. Load the pipeline locally just to get the EXACT feature names it wants
-        # This is the most reliable way to know what the model expects
-        best_pipeline = load_pipeline(session, aws_bucket, 'sklearn-pipeline-deployment')
-        
-        # 2. Get the features the model actually uses (after cleaning/engineering)
-        # We use the same logic we used for your importance graph
-        X_temp = best_pipeline.named_steps['cleaner'].transform(pd.DataFrame([input_dict]))
-        X_temp = best_pipeline.named_steps['feature_engineer'].transform(X_temp)
-        expected_features = X_temp.columns.tolist()
-
-        # 3. Create the input dataframe and force it to have ONLY those features
-        input_df = pd.DataFrame([input_dict])
-        
-        # Add any missing features as 0.0 and drop any extra features
-        for col in expected_features:
-            if col not in input_df.columns:
-                input_df[col] = 0.0
-        
-        input_df = input_df[expected_features]
-
-        # 4. Send to endpoint as a list of records
-        raw_pred = predictor.predict(input_df.to_dict(orient='records'))
-        
-        # 5. Parse result
-        pred_val = np.array(raw_pred).flatten()[0]
-        
-        mapping = {0: "Legitimate", 1: "Fraud"}
-        return mapping.get(int(float(pred_val)), "Unknown"), 200
-        
     except Exception as e:
         return f"Error: {str(e)}", 500
 
