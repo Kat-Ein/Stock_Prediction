@@ -24,19 +24,6 @@ import shap
 
 from joblib import dump
 from joblib import load
-####
-import sys
-import os
-
-# Get the path to the folder where THIS script is running (the Portfolio folder)
-current_folder = os.path.dirname(os.path.abspath(__file__))
-if current_folder not in sys.path:
-    sys.path.append(current_folder)
-
-# Now try the import again
-from custom_classes import DropHighMissingCols, TransactionFeatureEngineer, DropHighCorrelation
-######
-
 
 # Setup & Path Configuration
 warnings.simplefilter("ignore")
