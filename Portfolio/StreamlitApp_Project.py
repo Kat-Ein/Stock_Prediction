@@ -136,25 +136,32 @@ def call_model_api(input_dict):
     )
 
     try:
-        # 1. Ensure we have a DataFrame with all training columns
-        # This handles the 'productcd_count' error from your logs
-        input_df = pd.DataFrame([input_dict])
-        input_df = input_df.reindex(columns=dataset.columns, fill_value=0.0)
+        # 1. Load the pipeline locally just to get the EXACT feature names it wants
+        # This is the most reliable way to know what the model expects
+        best_pipeline = load_pipeline(session, aws_bucket, 'sklearn-pipeline-deployment')
         
-        # 2. Convert to the specific JSON format the server expects: 
-        # A list of records [{col1: val1, col2: val2}]
-        data_to_send = input_df.to_dict(orient='records')
+        # 2. Get the features the model actually uses (after cleaning/engineering)
+        # We use the same logic we used for your importance graph
+        X_temp = best_pipeline.named_steps['cleaner'].transform(pd.DataFrame([input_dict]))
+        X_temp = best_pipeline.named_steps['feature_engineer'].transform(X_temp)
+        expected_features = X_temp.columns.tolist()
 
-        # 3. Send to endpoint
-        raw_pred = predictor.predict(data_to_send)
+        # 3. Create the input dataframe and force it to have ONLY those features
+        input_df = pd.DataFrame([input_dict])
         
-        # 4. Extract the prediction value safely
-        if isinstance(raw_pred, (list, np.ndarray)):
-            # If it's a 2D array [[val]], get the first element
-            pred_val = raw_pred[0][0] if np.array(raw_pred).ndim > 1 else raw_pred[0]
-        else:
-            pred_val = raw_pred
-            
+        # Add any missing features as 0.0 and drop any extra features
+        for col in expected_features:
+            if col not in input_df.columns:
+                input_df[col] = 0.0
+        
+        input_df = input_df[expected_features]
+
+        # 4. Send to endpoint as a list of records
+        raw_pred = predictor.predict(input_df.to_dict(orient='records'))
+        
+        # 5. Parse result
+        pred_val = np.array(raw_pred).flatten()[0]
+        
         mapping = {0: "Legitimate", 1: "Fraud"}
         return mapping.get(int(float(pred_val)), "Unknown"), 200
         
