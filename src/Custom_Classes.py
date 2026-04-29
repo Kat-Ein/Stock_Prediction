@@ -6,7 +6,47 @@ from sklearn.preprocessing import PowerTransformer
 from scipy.stats import skew
 #from gensim.models import Word2Vec
 
+#cleaner class
+class DataCleaner(BaseEstimator, TransformerMixin):
+    def __init__(self, missing_threshold=0.80):
+        self.missing_threshold = missing_threshold
 
+    def fit(self, X, y=None):
+        X = X.copy()
+
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        # Clean column names
+        X.columns = X.columns.str.strip().str.lower().str.replace(' ', '_')
+
+        # Remove duplicate columns
+        X = X.loc[:, ~X.columns.duplicated()]
+
+        # Learn columns to drop from training data only
+        missing_fractions = X.isnull().mean()
+        self.drop_list_ = list(
+            missing_fractions[missing_fractions > self.missing_threshold].index
+        )
+
+        return self
+
+    def transform(self, X):
+        X = X.copy()
+
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        # Clean column names
+        X.columns = X.columns.str.strip().str.lower().str.replace(' ', '_')
+
+        # Remove duplicate columns
+        X = X.loc[:, ~X.columns.duplicated()]
+
+        # Drop columns learned during fit
+        X = X.drop(columns=self.drop_list_, errors='ignore')
+
+        return X
 
 class AutoPowerTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, threshold=0.75):
