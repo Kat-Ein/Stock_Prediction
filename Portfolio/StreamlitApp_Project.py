@@ -97,7 +97,6 @@ def load_shap_explainer(_session, bucket, key, local_path):
         s3_client.download_file(Filename=local_path, Bucket=bucket, Key=key)
     return joblib.load(local_path) # Changed to joblib for .shap files
 
-# Prediction Logic
 def call_model_api(input_dict):
     predictor = Predictor(
         endpoint_name=MODEL_INFO["endpoint"],
@@ -106,29 +105,28 @@ def call_model_api(input_dict):
         deserializer=NumpyDeserializer()
     )
     try:
-        # 1. Load the pipeline to see EXACTLY what features it wants
-        best_pipeline = load_pipeline(session, aws_bucket, 'sklearn-pipeline-deployment')
-        
-        # 2. Create a dummy dataframe from the user input
+        # 1. Convert dictionary to DataFrame
         input_df = pd.DataFrame([input_dict])
         
-        # 3. Use the PREPROCESSOR (everything before the model) to create the features
-        # This will create 'productcd_count' automatically using your FraudFeatureExtractor logic
-        preprocessor = Pipeline([step for step in best_pipeline.steps if step[0] != 'model'])
+        # 2. MANUALLY ensure 'productcd_count' exists
+        # This is the specific feature the model is complaining about
+        if 'productcd_count' not in input_df.columns:
+            input_df['productcd_count'] = 0 
+
+        # 3. Force the DataFrame to match the exact columns of your training set
+        # 'dataset' is the X_train.csv you loaded at the top
+        input_df = input_df.reindex(columns=dataset.columns, fill_value=0)
         
-        # We need a larger dataset to 'fit' the preprocessor if it's not already fitted, 
-        # but since it's loaded from joblib, it should be ready to transform.
-        processed_data = preprocessor.transform(input_df)
+        # 4. Send to SageMaker
+        # orient='records' sends the data with feature names included
+        raw_pred = predictor.predict(input_df.to_dict(orient='records'))
         
-        # 4. Send the perfectly formatted data to the endpoint
-        raw_pred = predictor.predict(processed_data.to_dict(orient='records'))
-        
+        # 5. Handle result
         pred_val = np.array(raw_pred).flatten()[0]
         mapping = {0: "Legitimate", 1: "Fraud"}
         return mapping.get(int(float(pred_val)), "Unknown"), 200
         
     except Exception as e:
-        # If that fails, it's likely the transform step. Let's try the safest fallback:
         return f"Error: {str(e)}", 500
 
 # Local Explainability
