@@ -108,7 +108,6 @@ def load_shap_explainer(_session, bucket, key, local_path):
      #   return shap.Explainer.load(f)
 
 # Prediction Logic
-'''
 def call_model_api(input_df):
 
     predictor = Predictor(
@@ -124,35 +123,6 @@ def call_model_api(input_df):
         #mapping = {0: "SELL", 1: "HOLD", 2: "BUY"}
         mapping = {0: "Legitimate", 1: "Fraud"}
         return mapping.get(pred_val), 200
-    except Exception as e:
-        return f"Error: {str(e)}", 500
-'''
-def call_model_api(input_dict):
-    predictor = Predictor(
-        endpoint_name=MODEL_INFO["endpoint"],
-        sagemaker_session=sm_session,
-        # Use NumpySerializer to match what Scikit-Learn expects
-        serializer=NumpySerializer(),
-        deserializer=NumpyDeserializer()
-    )
-
-    try:
-        # 1. Convert dict to DataFrame to ensure columns align with training
-        input_df = pd.DataFrame([input_dict])
-        
-        # 2. Reindex to match the EXACT columns your model was trained on
-        # This fills missing columns with 0, which prevents the "missing feature" crash
-        input_df = input_df.reindex(columns=dataset.columns, fill_value=0)
-
-        # 3. Send only the numerical values as a NumPy array
-        raw_pred = predictor.predict(input_df.values) 
-        
-        # 4. Extract the result (NumpyDeserializer returns an array)
-        pred_val = raw_pred[0]
-        
-        mapping = {0: "Legitimate", 1: "Fraud"}
-        return mapping.get(pred_val), 200
-        
     except Exception as e:
         return f"Error: {str(e)}", 500
 
