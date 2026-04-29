@@ -138,31 +138,25 @@ def call_model_api(input_dict):
         deserializer=NumpyDeserializer()
     )
     try:
-        # 1. Prepare the template from your dataset (currently 380 columns)
-        df_template = dataset.loc[:, ~dataset.columns.str.contains('^Unnamed')].iloc[0:1].copy()
+        # 1. We only send the features the user actually input
+        # This allows the Pipeline's internal 'DataCleaner' to handle the missing ones
+        input_df = pd.DataFrame([input_dict])
         
-        # 2. Update template with user inputs
-        for key, value in input_dict.items():
-            col_match = next((col for col in df_template.columns if col.lower() == key.lower()), None)
-            if col_match:
-                df_template[col_match] = value
+        # 2. Match the column names EXACTLY to what the model expects
+        # (Using the keys from your MODEL_INFO)
+        data_to_send = input_df.to_dict(orient='records')
 
-        # 3. TRUNCATE TO 328 FEATURES
-        # The error says the model expects 328, so we take only the first 328 columns
-        target_count = 328
-        if df_template.shape[1] > target_count:
-            df_template = df_template.iloc[:, :target_count]
-        
-        # 4. Send to SageMaker
-        data_to_send = df_template.to_dict(orient='records')
+        # 3. Predict
         raw_pred = predictor.predict(data_to_send)
         
-        # 5. Parse result
+        # 4. Handle Result
         pred_val = np.array(raw_pred).flatten()[0]
         mapping = {0: "Legitimate", 1: "Fraud"}
         return mapping.get(int(float(pred_val)), "Unknown"), 200
         
     except Exception as e:
+        # This will tell us if it's still a 500 error from AWS 
+        # or a local Python error
         return f"Error: {str(e)}", 500
 
 # --- UI LOGIC AT THE BOTTOM ---
