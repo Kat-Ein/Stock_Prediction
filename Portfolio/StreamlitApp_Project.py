@@ -59,81 +59,39 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 warnings.simplefilter("ignore")
 
- #cleaner class
+ # --- STEP 1: DEFINE CLASSES AT THE VERY TOP ---
 class DataCleaner(BaseEstimator, TransformerMixin):
     def __init__(self, missing_threshold=0.80):
         self.missing_threshold = missing_threshold
-
     def fit(self, X, y=None):
-        X = X.copy()
-
-        if not isinstance(X, pd.DataFrame):
-            X = pd.DataFrame(X)
-
-        # Clean column names
+        X = pd.DataFrame(X).copy()
         X.columns = X.columns.str.strip().str.lower().str.replace(' ', '_')
-
-        # Remove duplicate columns
-        X = X.loc[:, ~X.columns.duplicated()]
-
-        # Learn columns to drop from training data only
         missing_fractions = X.isnull().mean()
-        self.drop_list_ = list(
-            missing_fractions[missing_fractions > self.missing_threshold].index
-        )
-
+        self.drop_list_ = list(missing_fractions[missing_fractions > self.missing_threshold].index)
         return self
-
     def transform(self, X):
-        X = X.copy()
-
-        if not isinstance(X, pd.DataFrame):
-            X = pd.DataFrame(X)
-
-        # Clean column names
+        X = pd.DataFrame(X).copy()
         X.columns = X.columns.str.strip().str.lower().str.replace(' ', '_')
+        return X.drop(columns=self.drop_list_, errors='ignore')
 
-        # Remove duplicate columns
-        X = X.loc[:, ~X.columns.duplicated()]
-
-        # Drop columns learned during fit
-        X = X.drop(columns=self.drop_list_, errors='ignore')
-
-        return X
-
-#FEATURES
 class FraudFeatureExtractor(BaseEstimator, TransformerMixin):
     def __init__(self):
-        """
-        Stateful feature engineer for fraud detection.
-        Learns medians and frequencies from training data to prevent leakage.
-        """
         self.amt_median_ = None
-        self.card1_counts_ = None
-        self.product_counts_ = None
-
     def fit(self, X, y=None):
-        if not isinstance(X, pd.DataFrame):
-            X = pd.DataFrame(X)
-        
-        # Learn median for High Transaction Amount
+        X = pd.DataFrame(X)
         if 'transactionamt' in X.columns:
             self.amt_median_ = X['transactionamt'].median()
-        
-        # Learn Frequency Maps for card1 and productcd
-        if 'card1' in X.columns:
-            self.card1_counts_ = X['card1'].value_counts()
-        
-        if 'productcd' in X.columns:
-            self.product_counts_ = X['productcd'].value_counts()
-            
         return self
+    def transform(self, X):
+        X = pd.DataFrame(X).copy()
+        if 'transactionamt' in X.columns and self.amt_median_ is not None:
+            X['hightransactionamt'] = (X['transactionamt'] > self.amt_median_).astype(int)
+        return X
 
-#
-# 2. ASSIGN them to __main__ AFTER they are defined
+# --- STEP 2: MANUALLY INJECT INTO MAIN ---
+# This is the secret sauce that stops the ModuleNotFoundError
 __main__.DataCleaner = DataCleaner
 __main__.FraudFeatureExtractor = FraudFeatureExtractor
-#
 
 
 # Fix path for Streamlit Cloud (ensure 'src' is findable)
