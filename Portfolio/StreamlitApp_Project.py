@@ -1,7 +1,6 @@
 import os, sys, warnings, types
 import numpy as np
-import pd as pd # Fixed alias for consistency
-import pandas as pd
+import pandas as pd  # <--- FIX THIS LINE
 import streamlit as st
 import joblib
 import tarfile
