@@ -50,7 +50,8 @@ from joblib import dump
 
 from joblib import load
 ###################
-import __main__
+import os, sys, warnings
+import __main__  # <--- MUST IMPORT THIS
 from sklearn.base import BaseEstimator, TransformerMixin
  ###############
 
