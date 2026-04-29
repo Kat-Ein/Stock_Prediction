@@ -6,6 +6,34 @@ from sklearn.preprocessing import PowerTransformer
 from scipy.stats import skew
 #from gensim.models import Word2Vec
 
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.feature_selection import VarianceThreshold, SelectKBest, mutual_info_classif
+from sklearn.preprocessing import RobustScaler, FunctionTransformer, PowerTransformer
+from sklearn.impute import SimpleImputer
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline
+
+# NEW STEP 1: Sanitization (Remove features with zero variance)
+from sklearn.feature_selection import VarianceThreshold
+
+# NEW STEP 2: Creative Engineering (Time Decomposition)
+class TimeDecomposer(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None): return self
+    def transform(self, X):
+        X = X.copy()
+        if 'transactiondt' in X.columns:
+            X['hour'] = (X['transactiondt'] // 3600) % 24
+        return X
+
+# NEW STEP 3: Creative Engineering (Interaction Feature)
+class InteractionEngineer(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None): return self
+    def transform(self, X):
+        X = X.copy()
+        if 'transactionamt' in X.columns and 'card1' in X.columns:
+            X['amt_to_card_ratio'] = X['transactionamt'] / (X['card1'] + 1)
+        return X
+
 #cleaner class
 class DataCleaner(BaseEstimator, TransformerMixin):
     def __init__(self, missing_threshold=0.80):
@@ -75,7 +103,7 @@ class FraudFeatureExtractor(BaseEstimator, TransformerMixin):
             self.product_counts_ = X['productcd'].value_counts()
             
         return self
-
+        
     def transform(self, X):
         # Always work on a copy to avoid SettingWithCopyWarnings
         X_out = X.copy()
@@ -98,6 +126,8 @@ class FraudFeatureExtractor(BaseEstimator, TransformerMixin):
             X_out['productcd_count'] = X_out['productcd'].map(self.product_counts_).fillna(0)
             
         return X_out
+
+#####
 
 class AutoPowerTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, threshold=0.75):
