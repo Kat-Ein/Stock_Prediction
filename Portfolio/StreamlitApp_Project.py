@@ -127,25 +127,32 @@ def call_model_api(input_df):
     except Exception as e:
         return f"Error: {str(e)}", 500
 '''
-# Prediction Logic
 def call_model_api(input_dict):
     predictor = Predictor(
         endpoint_name=MODEL_INFO["endpoint"],
         sagemaker_session=sm_session,
-        serializer=CSVSerializer(), # Change to CSV for better compatibility
+        # Use NumpySerializer to match what Scikit-Learn expects
+        serializer=NumpySerializer(),
         deserializer=NumpyDeserializer()
     )
 
     try:
-        # Convert the dictionary to a DataFrame to ensure column order
+        # 1. Convert dict to DataFrame to ensure columns align with training
         input_df = pd.DataFrame([input_dict])
         
-        # Send ONLY the values (as CSV) to the endpoint
+        # 2. Reindex to match the EXACT columns your model was trained on
+        # This fills missing columns with 0, which prevents the "missing feature" crash
+        input_df = input_df.reindex(columns=dataset.columns, fill_value=0)
+
+        # 3. Send only the numerical values as a NumPy array
         raw_pred = predictor.predict(input_df.values) 
         
+        # 4. Extract the result (NumpyDeserializer returns an array)
         pred_val = raw_pred[0]
+        
         mapping = {0: "Legitimate", 1: "Fraud"}
         return mapping.get(pred_val), 200
+        
     except Exception as e:
         return f"Error: {str(e)}", 500
 
