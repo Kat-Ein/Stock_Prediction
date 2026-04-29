@@ -48,6 +48,57 @@ class DataCleaner(BaseEstimator, TransformerMixin):
 
         return X
 
+#FEATURES
+class FraudFeatureExtractor(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        """
+        Stateful feature engineer for fraud detection.
+        Learns medians and frequencies from training data to prevent leakage.
+        """
+        self.amt_median_ = None
+        self.card1_counts_ = None
+        self.product_counts_ = None
+
+    def fit(self, X, y=None):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+        
+        # Learn median for High Transaction Amount
+        if 'transactionamt' in X.columns:
+            self.amt_median_ = X['transactionamt'].median()
+        
+        # Learn Frequency Maps for card1 and productcd
+        if 'card1' in X.columns:
+            self.card1_counts_ = X['card1'].value_counts()
+        
+        if 'productcd' in X.columns:
+            self.product_counts_ = X['productcd'].value_counts()
+            
+        return self
+
+    def transform(self, X):
+        # Always work on a copy to avoid SettingWithCopyWarnings
+        X_out = X.copy()
+        if not isinstance(X_out, pd.DataFrame):
+            X_out = pd.DataFrame(X_out)
+        
+        # 1. Transaction Hour (Stateless)
+        if 'transactiondt' in X_out.columns:
+            X_out['transactionhour'] = ((X_out['transactiondt'] / 3600) % 24).astype(int)
+        
+        # 2. High Transaction Amount (Stateful)
+        if 'transactionamt' in X_out.columns and self.amt_median_ is not None:
+            X_out['hightransactionamt'] = (X_out['transactionamt'] > self.amt_median_).astype(int)
+            
+        # 3. Transaction Frequency (Stateful)
+        if 'card1' in X_out.columns and self.card1_counts_ is not None:
+            X_out['card1_count'] = X_out['card1'].map(self.card1_counts_).fillna(0)
+        
+        if 'productcd' in X_out.columns and self.product_counts_ is not None:
+            X_out['productcd_count'] = X_out['productcd'].map(self.product_counts_).fillna(0)
+            
+        return X_out
+
 class AutoPowerTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, threshold=0.75):
         self.threshold = threshold
