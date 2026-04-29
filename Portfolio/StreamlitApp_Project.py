@@ -74,25 +74,32 @@ def call_model_api(user_inputs):
         deserializer=NumpyDeserializer()
     )
     try:
-        # Create template and inject user data
+        # 1. Create template and inject user data
         df_full = dataset.iloc[0:1].copy()
         for k, v in user_inputs.items():
             col = next((c for c in df_full.columns if c.lower() == k.lower()), None)
-            if col: df_full[col] = float(v)
+            if col: 
+                df_full[col] = float(v)
         
-        # Force 328 columns (matches SelectKBest)
+        # 2. Force 328 columns
         df_payload = df_full.iloc[:, :328]
         
-        # Send to AWS
+        # --- THE FINAL FIX FOR 500 ERRORS ---
+        # 3. Ensure NO non-finite values (NaN, Inf) are sent
+        # Scikit-Learn pipelines CRASH on SageMaker if they see a 'NaN'
+        df_payload = df_payload.apply(pd.to_numeric, errors='coerce')
+        df_payload = df_payload.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        
+        # 4. Send as clean numeric list
         raw_response = predictor.predict(df_payload.values.tolist())
         
-        # DIG FOR THE NUMBER (Fixes the Dict error)
+        # 5. Dig for the number
         final_value = find_the_number(raw_response)
         
         label = "Fraudulent" if int(float(final_value)) == 1 else "Legitimate"
         return label, 200
     except Exception as e:
-        return f"Error: {str(e)}", 500
+        return f"Endpoint Error: {str(e)}", 500
 
 # --- 5. UI ---
 st.title("🛡️ Fraud Detection System")
