@@ -126,7 +126,7 @@ def call_model_api(input_df):
     except Exception as e:
         return f"Error: {str(e)}", 500
 '''
-try:
+    try:
         # 1. Convert the user input dictionary to a DataFrame
         input_df = pd.DataFrame([input_dict])
         
