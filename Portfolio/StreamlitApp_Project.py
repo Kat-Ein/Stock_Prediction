@@ -215,30 +215,35 @@ def load_shap_explainer(_session, bucket, key, local_path):
 # Prediction Logic
 def call_model_api(input_dict):
     predictor = Predictor(
-        # Use the variable 'aws_endpoint' that you defined at line 66
-        endpoint_name=aws_endpoint, 
+        endpoint_name=aws_endpoint,
         sagemaker_session=sm_session,
         serializer=JSONSerializer(),
         deserializer=NumpyDeserializer()
     )
     try:
-        # 1. Start with one real row from your CSV (381 columns)
+        # 1. Grab a template row and drop 'Unnamed' columns
         df_template = dataset.loc[:, ~dataset.columns.str.contains('^Unnamed')].iloc[0:1].copy()
         
-        # 2. Update the template with user inputs
+        # 2. Convert the entire template to numeric
+        # This prevents 'object' type columns from crashing the model math
+        df_template = df_template.apply(pd.to_numeric, errors='coerce').fillna(0)
+        
+        # 3. Map user inputs (ensuring they are floats)
         for key, value in input_dict.items():
             actual_col = next((c for c in df_template.columns if c.lower() == key.lower()), None)
             if actual_col:
-                df_template[actual_col] = value
+                df_template[actual_col] = float(value)
 
-        # 3. CRITICAL: Force the 328-column limit
+        # 4. Force the 328-column limit
         df_final = df_template.iloc[:, :328]
         
-        # 4. Convert to records and send
-        data_to_send = df_final.to_dict(orient='records')
-        raw_pred = predictor.predict(data_to_send)
+        # 5. Send as a simple list of values (Numerical Array)
+        # Sometimes the Pipeline prefers raw values over dictionary records
+        payload = df_final.values.tolist()
         
-        # 5. Parse result
+        raw_pred = predictor.predict(payload)
+        
+        # 6. Parse result
         pred_val = np.array(raw_pred).flatten()[0]
         mapping = {0: "Legitimate", 1: "Fraud"}
         return mapping.get(int(float(pred_val)), "Unknown"), 200
