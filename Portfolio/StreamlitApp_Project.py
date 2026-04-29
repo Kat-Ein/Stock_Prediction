@@ -1,6 +1,6 @@
 import os, sys, warnings, types
 import numpy as np
-import pandas as pd  # <--- FIX THIS LINE
+import pandas as pd
 import streamlit as st
 import joblib
 import tarfile
@@ -13,11 +13,11 @@ from sagemaker.serializers import JSONSerializer
 from sagemaker.deserializers import NumpyDeserializer
 from sklearn.base import BaseEstimator, TransformerMixin
 
-# --- 1. VIRTUAL MODULE HACK (Fixes ModuleNotFoundError) ---
+# --- 1. VIRTUAL MODULE HACK (Fixes ModuleNotFoundError for Custom Classes) ---
 m = types.ModuleType('src.Custom_Classes')
 sys.modules['src.Custom_Classes'] = m
 
-# --- 2. CUSTOM CLASS DEFINITIONS ---
+# --- 2. CUSTOM CLASS DEFINITIONS (Must match your training notebook) ---
 class DataCleaner(BaseEstimator, TransformerMixin):
     def __init__(self, missing_threshold=0.80):
         self.missing_threshold = missing_threshold
@@ -47,11 +47,11 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, '..'))
 file_path = os.path.join(project_root, 'Portfolio/X_train.csv')
 
-# Load the 328-column template
+# Load the template (380 columns)
 @st.cache_data
 def load_template():
     df = pd.read_csv(file_path, index_col=0)
-    # Remove index columns or unnamed columns to match the 328 count
+    # Remove index/unnamed columns
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
     return df
 
@@ -67,7 +67,7 @@ session = boto3.Session(
 )
 sm_session = sagemaker.Session(boto_session=session)
 
-# --- 4. PREDICTION LOGIC (OPTION A: THE TEMPLATE METHOD) ---
+# --- 4. PREDICTION LOGIC (FIXED: 328-COLUMN TRUNCATION) ---
 def call_model_api(user_inputs):
     predictor = Predictor(
         endpoint_name=aws_credentials["AWS_ENDPOINT"],
@@ -76,22 +76,22 @@ def call_model_api(user_inputs):
         deserializer=NumpyDeserializer()
     )
     try:
-        # 1. Take a real row (all 328 columns)
+        # 1. Grab a template row from your local CSV (380 columns)
         df_full = dataset.iloc[0:1].copy()
         
-        # 2. Overwrite only the features the user touched
-        # Using .lower() to ensure names match the CSV headers
+        # 2. Map user inputs to the template
         for key, val in user_inputs.items():
             if key in df_full.columns:
                 df_full[key] = val
         
-        # 3. Final Truncation to exactly 328 columns (as requested by the model error)
+        # 3. THE FIX: Truncate to exactly 328 columns 
+        # This matches the 'SelectKBest' requirement on the AWS side
         df_final = df_full.iloc[:, :328]
         
-        # 4. Send as a record
+        # 4. Send to SageMaker as a record
         raw_pred = predictor.predict(df_final.to_dict(orient='records'))
         
-        # 5. Result Mapping
+        # 5. Process result
         pred_val = np.array(raw_pred).flatten()[0]
         label = "Fraudulent" if int(float(pred_val)) == 1 else "Legitimate"
         return label, 200
@@ -110,13 +110,13 @@ with st.form("input_form"):
         amt = st.number_input("TRANSACTION AMOUNT", value=100.00)
         hour = st.number_input("TRANSACTION HOUR (0-23)", value=12.0)
     with c2:
-        high_amt = st.selectbox("IS HIGH TRANSACTION?", [0, 1])
+        high_amt = st.selectbox("IS HIGH TRANSACTION? (0=No, 1=Yes)", [0, 1])
         v92 = st.number_input("V92 FEATURE VALUE", value=0.0)
     
     submitted = st.form_submit_button("Analyze Transaction")
 
 if submitted:
-    # Package inputs to match CSV column names exactly
+    # Match the keys exactly to your CSV column names
     user_data = {
         'transactionamt': amt,
         'transactionhour': hour,
@@ -124,7 +124,7 @@ if submitted:
         'v92': v92
     }
     
-    with st.spinner("Communicating with SageMaker..."):
+    with st.spinner("Analyzing transaction on AWS SageMaker..."):
         result, status = call_model_api(user_data)
         
     if status == 200:
@@ -132,4 +132,6 @@ if submitted:
         st.markdown(f"### Result: :{color}[{result}]")
     else:
         st.error(result)
-        st.info("Check your AWS Session Token if you see an 'ExpiredToken' error.")
+        # Helpful reminder for Lab users
+        if "ExpiredToken" in result:
+            st.warning("Your AWS Session Token has expired. Please refresh your credentials in Streamlit secrets.")
