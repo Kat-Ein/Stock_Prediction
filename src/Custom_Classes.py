@@ -21,24 +21,25 @@ from imblearn.pipeline import Pipeline
 # NEW STEP 1: Sanitization (Remove features with zero variance)
 from sklearn.feature_selection import VarianceThreshold
 
-# NEW STEP 2: Creative Engineering (Time Decomposition)
+# 3. ADD THIS: TimeDecomposer
 class TimeDecomposer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None): return self
     def transform(self, X):
         X = X.copy()
-        if 'transactiondt' in X.columns:
-            X['hour'] = (X['transactiondt'] // 3600) % 24
+        col = next((c for c in X.columns if c.lower() == 'transactiondt'), None)
+        if col:
+            X['transaction_hour'] = (X[col] // 3600) % 24
         return X
 
-# NEW STEP 3: Creative Engineering (Interaction Feature)
+# 4. ADD THIS: InteractionEngineer
 class InteractionEngineer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None): return self
     def transform(self, X):
         X = X.copy()
-        if 'transactionamt' in X.columns and 'card1' in X.columns:
-            X['amt_to_card_ratio'] = X['transactionamt'] / (X['card1'] + 1)
+        if 'TransactionAmt' in X.columns and 'card1' in X.columns:
+            X['amt_card_ratio'] = X['TransactionAmt'] / (X['card1'] + 1)
         return X
-
+        
 #cleaner class
 class DataCleaner(BaseEstimator, TransformerMixin):
     def __init__(self, missing_threshold=0.80):
