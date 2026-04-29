@@ -49,8 +49,17 @@ import shap
 from joblib import dump
 
 from joblib import load
+###################
+import __main__
+from sklearn.base import BaseEstimator, TransformerMixin
 
- 
+# --- CRITICAL: Link the custom classes to the main namespace ---
+# This "tricks" joblib into finding the classes you defined in this file
+__main__.DataCleaner = DataCleaner
+__main__.FraudFeatureExtractor = FraudFeatureExtractor
+# Add any other custom class names here, for example:
+# __main__.DropHighMissingCols = DropHighMissingCols
+ ###############
 
 # Setup & Path Configuration
 
