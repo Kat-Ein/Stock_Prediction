@@ -72,7 +72,7 @@ MODEL_INFO = {
     "explainer" : "explainer_sentiment.shap",
     "pipeline"  : "finalized_fraud_model.tar.gz",
     "keys"      : ['transactionamt','transactionhour','hightransactionamt','card1_count'],
-    "inputs"    : [{"name": k, "type": "number", "min": -1.0, "max": 1.0, "default": 0.0, "step": 0.01} for k in ['TransactionAmt','transactionhour','hightransactionamt','card1_count']]
+    "inputs"    : [{"name": k, "type": "number", "min": -1.0, "max": 1.0, "default": 0.0, "step": 0.01} for k in ['transactionamt','transactionhour','hightransactionamt','card1_count']]
 }
 
 
