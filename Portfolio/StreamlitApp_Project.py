@@ -131,39 +131,29 @@ def call_model_api(input_dict):
 '''
 # Prediction Logic
 def call_model_api(input_dict):
+    # We use CSVSerializer to send RAW values, bypassing the "name mismatch" errors
     predictor = Predictor(
         endpoint_name=MODEL_INFO["endpoint"],
         sagemaker_session=sm_session,
-        # Using CSVSerializer sends only values, no column names
-        serializer=sagemaker.serializers.CSVSerializer(),
+        serializer=sagemaker.serializers.CSVSerializer(), 
         deserializer=NumpyDeserializer()
     )
     try:
-        # 1. Create the DataFrame to organize the data
+        # 1. Create a DataFrame from the user input
         input_df = pd.DataFrame([input_dict])
         
         # 2. Reindex against YOUR 328-column dataset
-        # This ensures the 4 user inputs are in the EXACT right slots
+        # This places your inputs in the correct 'slots' and fills the rest with 0.0
         input_df = input_df.reindex(columns=dataset.columns, fill_value=0.0)
         
-        # 3. VERIFY SHAPE - If the model wants 380, we must provide 380.
-        # If your previous error said it expects 380, use 380 here.
-        # If it said 328, use 328 here.
-        expected_count = 328 # <--- CHANGE THIS TO 380 IF THE ERROR SWITCHES BACK
-        
-        current_count = input_df.shape[1]
-        if current_count < expected_count:
-            # Pad with zeros to reach the requirement
-            padding = np.zeros((1, expected_count - current_count))
-            data_to_send = np.hstack([input_df.values, padding])
-        else:
-            # Take only the first N features if there are too many
-            data_to_send = input_df.values[:, :expected_count]
+        # 3. Convert to a raw list of values (No column names sent to AWS!)
+        # This prevents the "Feature names unseen" error
+        data_to_send = input_df.values.tolist()
 
-        # 4. Send the raw array (no feature names to cause "unseen" errors)
+        # 4. Send to SageMaker
         raw_pred = predictor.predict(data_to_send)
         
-        # 5. Extract result
+        # 5. Extract result and map it
         pred_val = np.array(raw_pred).flatten()[0]
         mapping = {0: "Legitimate", 1: "Fraud"}
         
