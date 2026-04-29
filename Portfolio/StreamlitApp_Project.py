@@ -131,35 +131,41 @@ def call_model_api(input_dict):
 '''
 # Prediction Logic
 def call_model_api(input_dict):
-    # We use CSVSerializer to send RAW values, bypassing the "name mismatch" errors
+    # We switch to a raw CSV Serializer. This sends NO column names.
+    # This prevents the "Unseen feature names" error entirely.
     predictor = Predictor(
         endpoint_name=MODEL_INFO["endpoint"],
         sagemaker_session=sm_session,
-        serializer=sagemaker.serializers.CSVSerializer(), 
-        deserializer=NumpyDeserializer()
+        serializer=sagemaker.serializers.CSVSerializer(),
+        deserializer=sagemaker.deserializers.JSONDeserializer() # SageMaker often returns JSON by default
     )
     try:
-        # 1. Create a DataFrame from the user input
+        # 1. Align the 4 user inputs with the 328 columns in your X_train.csv
         input_df = pd.DataFrame([input_dict])
-        
-        # 2. Reindex against YOUR 328-column dataset
-        # This places your inputs in the correct 'slots' and fills the rest with 0.0
         input_df = input_df.reindex(columns=dataset.columns, fill_value=0.0)
         
-        # 3. Convert to a raw list of values (No column names sent to AWS!)
-        # This prevents the "Feature names unseen" error
-        data_to_send = input_df.values.tolist()
+        # 2. Convert to a flat list of values (e.g., [0.1, 0.0, 50.0, ...])
+        # We ensure it is a simple list of floats
+        data_to_send = input_df.values.flatten().tolist()
 
-        # 4. Send to SageMaker
+        # 3. Send to SageMaker
+        # By sending a list to the CSVSerializer, it sends a string: "0.1,0.0,50.0..."
         raw_pred = predictor.predict(data_to_send)
         
-        # 5. Extract result and map it
-        pred_val = np.array(raw_pred).flatten()[0]
+        # 4. Parse the output
+        # Handle if output is a dict, list, or single value
+        if isinstance(raw_pred, dict) and 'predictions' in raw_pred:
+            pred_val = raw_pred['predictions'][0]
+        elif isinstance(raw_pred, list):
+            pred_val = raw_pred[0]
+        else:
+            pred_val = raw_pred
+            
         mapping = {0: "Legitimate", 1: "Fraud"}
-        
         return mapping.get(int(float(pred_val)), "Unknown"), 200
         
     except Exception as e:
+        # This will catch if the error is local (Streamlit) or remote (AWS)
         return f"Error: {str(e)}", 500
 
 # Local Explainability
