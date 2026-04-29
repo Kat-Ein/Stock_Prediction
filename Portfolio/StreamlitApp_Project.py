@@ -69,7 +69,7 @@ sm_session = sagemaker.Session(boto_session=session)
 
 MODEL_INFO = {
     "endpoint"  : aws_endpoint,
-    "explainer" : "explainer_sentiment.shap",
+    "explainer" : "explainer_pair.shap",
     "pipeline"  : "finalized_fraud_model.tar.gz",
     "keys"      : ['transactionamt','transactionhour','hightransactionamt','card1_count'],
     "inputs"    : [{"name": k, "type": "number", "min": -1.0, "max": 1.0, "default": 0.0, "step": 0.01} for k in ['transactionamt','transactionhour','hightransactionamt','card1_count']]
@@ -131,15 +131,15 @@ def display_explanation(input_df, session, aws_bucket):
     explainer = load_shap_explainer(session, aws_bucket, posixpath.join('explainer', explainer_name),os.path.join(tempfile.gettempdir(), explainer_name))
    
     best_pipeline = load_pipeline(session, aws_bucket, 'sklearn-pipeline-deployment')
-    preprocessing_pipeline = Pipeline(steps=best_pipeline.steps[:-2])
+    preprocessing_steps = [
+    (name, step) for name, step in best_pipeline.steps
+    if name not in ['sampler', 'model']]
+    preprocessing_pipeline = Pipeline(preprocessing_steps)
     input_df=pd.DataFrame(input_df)
     input_df_transformed = preprocessing_pipeline.transform(input_df)
-    #feature_names = best_pipeline[:-3].get_feature_names_out()
-    dataset_1 = dataset.iloc[:, 0:]
-    feature_names = dataset_1.columns[1:]
-    selector = best_pipeline.named_steps['selector']
-    selected_features = feature_names[selector.get_support()]
-    input_df_transformed = pd.DataFrame(input_df_transformed, columns=selected_features)
+    selector = preprocessing_pipeline.named_steps['feature_selection']
+    feature_names = dataset.columns[selector.get_support()]
+    input_df_transformed = pd.DataFrame(input_df_transformed, columns=feature_names)
     #input_df_transformed = pd.DataFrame(input_df_transformed)
     shap_values = explainer(input_df_transformed)
    
