@@ -56,7 +56,75 @@ from joblib import load
 
 warnings.simplefilter("ignore")
 
- 
+ #cleaner class
+class DataCleaner(BaseEstimator, TransformerMixin):
+    def __init__(self, missing_threshold=0.80):
+        self.missing_threshold = missing_threshold
+
+    def fit(self, X, y=None):
+        X = X.copy()
+
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        # Clean column names
+        X.columns = X.columns.str.strip().str.lower().str.replace(' ', '_')
+
+        # Remove duplicate columns
+        X = X.loc[:, ~X.columns.duplicated()]
+
+        # Learn columns to drop from training data only
+        missing_fractions = X.isnull().mean()
+        self.drop_list_ = list(
+            missing_fractions[missing_fractions > self.missing_threshold].index
+        )
+
+        return self
+
+    def transform(self, X):
+        X = X.copy()
+
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        # Clean column names
+        X.columns = X.columns.str.strip().str.lower().str.replace(' ', '_')
+
+        # Remove duplicate columns
+        X = X.loc[:, ~X.columns.duplicated()]
+
+        # Drop columns learned during fit
+        X = X.drop(columns=self.drop_list_, errors='ignore')
+
+        return X
+
+#FEATURES
+class FraudFeatureExtractor(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        """
+        Stateful feature engineer for fraud detection.
+        Learns medians and frequencies from training data to prevent leakage.
+        """
+        self.amt_median_ = None
+        self.card1_counts_ = None
+        self.product_counts_ = None
+
+    def fit(self, X, y=None):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+        
+        # Learn median for High Transaction Amount
+        if 'transactionamt' in X.columns:
+            self.amt_median_ = X['transactionamt'].median()
+        
+        # Learn Frequency Maps for card1 and productcd
+        if 'card1' in X.columns:
+            self.card1_counts_ = X['card1'].value_counts()
+        
+        if 'productcd' in X.columns:
+            self.product_counts_ = X['productcd'].value_counts()
+            
+        return self
 
 # Fix path for Streamlit Cloud (ensure 'src' is findable)
 
