@@ -23,15 +23,15 @@ from sklearn.feature_selection import VarianceThreshold
 
 class TimeDecomposer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
-        # Store column names during the 'fit' stage
+        # Store column names during the first fit
         if hasattr(X, 'columns'):
-            self.feature_names = X.columns.tolist()
+            self.feature_names_in_ = X.columns.tolist()
         return self
         
     def transform(self, X):
-        # If SMOTE or Scaler turned X into a numpy array, turn it back
+        # Restore DataFrame structure if X was converted to a numpy array
         if isinstance(X, np.ndarray):
-            X = pd.DataFrame(X, columns=self.feature_names)
+            X = pd.DataFrame(X, columns=self.feature_names_in_)
         
         X = X.copy()
         col = next((c for c in X.columns if c.lower() == 'transactiondt'), None)
@@ -42,12 +42,12 @@ class TimeDecomposer(BaseEstimator, TransformerMixin):
 class InteractionEngineer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         if hasattr(X, 'columns'):
-            self.feature_names = X.columns.tolist()
+            self.feature_names_in_ = X.columns.tolist()
         return self
         
     def transform(self, X):
         if isinstance(X, np.ndarray):
-            X = pd.DataFrame(X, columns=self.feature_names)
+            X = pd.DataFrame(X, columns=self.feature_names_in_)
             
         X = X.copy()
         if 'TransactionAmt' in X.columns and 'card1' in X.columns:
