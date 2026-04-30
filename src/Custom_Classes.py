@@ -23,36 +23,32 @@ from sklearn.feature_selection import VarianceThreshold
 
 class TimeDecomposer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
-        # Store column names during the first fit
+        # We need to know which index the column is at if it becomes a numpy array
         if hasattr(X, 'columns'):
-            self.feature_names_in_ = X.columns.tolist()
+            self.cols_ = X.columns.tolist()
+            self.dt_idx_ = X.columns.get_loc('TransactionDT') if 'TransactionDT' in X.columns else None
         return self
         
     def transform(self, X):
-        # Restore DataFrame structure if X was converted to a numpy array
-        if isinstance(X, np.ndarray):
-            X = pd.DataFrame(X, columns=self.feature_names_in_)
+        X_df = pd.DataFrame(X, columns=self.cols_) if isinstance(X, np.ndarray) else X.copy()
         
-        X = X.copy()
-        col = next((c for c in X.columns if c.lower() == 'transactiondt'), None)
-        if col:
-            X['transaction_hour'] = (X[col] // 3600) % 24
-        return X
+        # Logic to extract hour
+        if 'TransactionDT' in X_df.columns:
+            X_df['transaction_hour'] = (X_df['TransactionDT'] // 3600) % 24
+        return X_df
 
 class InteractionEngineer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         if hasattr(X, 'columns'):
-            self.feature_names_in_ = X.columns.tolist()
+            self.cols_ = X.columns.tolist()
         return self
         
     def transform(self, X):
-        if isinstance(X, np.ndarray):
-            X = pd.DataFrame(X, columns=self.feature_names_in_)
-            
-        X = X.copy()
-        if 'TransactionAmt' in X.columns and 'card1' in X.columns:
-            X['amt_card_ratio'] = X['TransactionAmt'] / (X['card1'] + 1)
-        return X
+        X_df = pd.DataFrame(X, columns=self.cols_) if isinstance(X, np.ndarray) else X.copy()
+        
+        if 'TransactionAmt' in X_df.columns and 'card1' in X_df.columns:
+            X_df['amt_card_ratio'] = X_df['TransactionAmt'] / (X_df['card1'] + 1)
+        return X_df
         
 #cleaner class
 class DataCleaner(BaseEstimator, TransformerMixin):
