@@ -21,20 +21,27 @@ from imblearn.pipeline import Pipeline
 # NEW STEP 1: Sanitization (Remove features with zero variance)
 from sklearn.feature_selection import VarianceThreshold
 
-# 3. ADD THIS: TimeDecomposer
 class TimeDecomposer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None): return self
     def transform(self, X):
+        # Convert back to DataFrame if it's a Numpy array
+        if isinstance(X, np.ndarray):
+            X = pd.DataFrame(X, columns=self.feature_names_in_)
         X = X.copy()
+        # Find the timestamp column
         col = next((c for c in X.columns if c.lower() == 'transactiondt'), None)
         if col:
             X['transaction_hour'] = (X[col] // 3600) % 24
         return X
 
-# 4. ADD THIS: InteractionEngineer
 class InteractionEngineer(BaseEstimator, TransformerMixin):
-    def fit(self, X, y=None): return self
+    def fit(self, X, y=None): 
+        if hasattr(X, 'columns'):
+            self.feature_names_in_ = X.columns.tolist()
+        return self
     def transform(self, X):
+        if isinstance(X, np.ndarray):
+            X = pd.DataFrame(X, columns=self.feature_names_in_)
         X = X.copy()
         if 'TransactionAmt' in X.columns and 'card1' in X.columns:
             X['amt_card_ratio'] = X['TransactionAmt'] / (X['card1'] + 1)
