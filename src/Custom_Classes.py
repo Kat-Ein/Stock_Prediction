@@ -18,7 +18,7 @@ from sklearn.preprocessing import RobustScaler, FunctionTransformer
 from sklearn.impute import SimpleImputer
 from imblearn.pipeline import Pipeline
 
-# NEW STEP 1: Sanitization (Remove features with zero variance)
+# Sanitization (Remove features with zero variance)
 from sklearn.feature_selection import VarianceThreshold
 
 class TimeDecomposer(BaseEstimator, TransformerMixin):
