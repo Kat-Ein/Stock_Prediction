@@ -260,13 +260,16 @@ def display_explanation(input_df, session, aws_bucket):
 
     best_pipeline = load_pipeline(session, aws_bucket, 'sklearn-pipeline-deployment')
 
-    preprocessing_steps = [
+    #preprocessing_steps = [
 
-    (name, step) for name, step in best_pipeline.steps
+    #(name, step) for name, step in best_pipeline.steps
 
-    if name not in ['sampler', 'model']]
-
+    #if name not in ['sampler', 'model']]
+    preprocessing_steps = [(n, s) for n, s in best_pipeline.steps if n not in ['sampler', 'model']]
     preprocessing_pipeline = Pipeline(preprocessing_steps)
+
+
+    #preprocessing_pipeline = Pipeline(preprocessing_steps)
 
     input_df=pd.DataFrame(input_df)
 
